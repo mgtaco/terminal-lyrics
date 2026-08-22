@@ -1,0 +1,10 @@
+[ti:Test Song]
+[ar:Test Artist]
+[al:Test Album]
+[length:03:20]
+
+# a comment line
+[00:10]no decimal seconds
+[00:14.5]one decimal
+[00:18.25]two decimals
+[00:22.750]three decimals

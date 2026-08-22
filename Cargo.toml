@@ -1,0 +1,34 @@
+[package]
+name = "terminal-lyrics"
+version = "0.1.0"
+edition = "2024"
+description = "Giant ASCII block lyrics in your terminal, synced to whatever MPRIS player is running"
+license = "MIT"
+
+[lib]
+name = "terminal_lyrics"
+path = "src/lib.rs"
+
+[[bin]]
+name = "lyrics"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0.104"
+clap = { version = "4.6.6", features = ["derive"] }
+crossterm = { version = "0.29.0", features = ["event-stream"] }
+directories = "6.0.0"
+futures-lite = "2.6.1"
+ratatui = "0.30.2"
+reqwest = { version = "0.13.4", default-features = false, features = ["rustls", "json", "charset", "http2", "query", "system-proxy"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+thiserror = "2.0.20"
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "time", "signal", "sync"] }
+toml = "1.1.4"
+unicode-width = "0.2.2"
+zbus = { version = "5.19.0", default-features = false, features = ["tokio"] }
+
+[profile.release]
+lto = true
+strip = true

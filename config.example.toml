@@ -1,0 +1,30 @@
+# terminal-lyrics configuration.
+# Copy to ~/.config/terminal-lyrics/config.toml — every key is optional, and
+# every one of them is also a command-line flag, which takes precedence.
+
+# MPRIS player to follow. Omit to use the first one found.
+# player = "spotify"
+
+# "block" (5 rows), "compact" (3 rows) or "mini" (plain text).
+# The visualiser steps down automatically when the terminal is too small.
+font = "block"
+
+# Shift lyrics in milliseconds; positive shows them later.
+offset_ms = 0
+
+# Check this directory for "Artist - Title.lrc" before querying the network.
+# lrc_dir = "~/lyrics"
+
+# Set false to use only the cache and lrc_dir.
+network = true
+
+# Highlight words as they are sung.
+sweep = true
+
+# Redraw interval in milliseconds (10–1000). Only the sweep moves between
+# player events, and unchanged cells are not redrawn at all.
+tick_ms = 30
+
+# How far the predicted position may drift from the player's own reading
+# before re-anchoring, in milliseconds (50–5000).
+resync_threshold_ms = 250
