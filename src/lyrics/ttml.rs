@@ -19,6 +19,43 @@ use quick_xml::reader::Reader;
 
 use crate::lrc;
 
+/// A TTML time expression.
+///
+/// The spec allows a clock time (`00:04.658`, `01:02:03.4`) or an offset with a
+/// metric suffix (`4.658s`, `250ms`). Real files also write a bare number,
+/// meaning seconds — and AMLL switches between forms *within one file*, writing
+/// `4.658` below a minute and `1:04.579` above it. Handling only the colon form
+/// silently drops every line in the first minute.
+pub fn parse_time(raw: &str) -> Option<f64> {
+    let t = raw.trim();
+    if t.is_empty() {
+        return None;
+    }
+    if t.contains(':') {
+        return lrc::parse_clock(t);
+    }
+
+    // Offset time: a number with an optional metric suffix.
+    let (number, metric) = match t.find(|c: char| c.is_ascii_alphabetic()) {
+        Some(i) => (&t[..i], &t[i..]),
+        None => (t, ""),
+    };
+    let value: f64 = number.trim().replace(',', ".").parse().ok()?;
+    if !value.is_finite() || value < 0.0 {
+        return None;
+    }
+    let seconds = match metric.trim() {
+        "" | "s" => value,
+        "ms" => value / 1000.0,
+        "m" => value * 60.0,
+        "h" => value * 3600.0,
+        // Frames and ticks need the document's frame rate, which these files do
+        // not carry; treating them as seconds would be a silent lie.
+        _ => return None,
+    };
+    Some(seconds)
+}
+
 /// Spans that are not part of the sung line.
 fn is_skippable_role(role: &str) -> bool {
     // Translations and romanisations are separate text; background vocals are a
@@ -55,6 +92,10 @@ pub fn to_enhanced_lrc(xml: &str) -> Result<String> {
     let mut skip_depth = 0usize;
     let mut span_stack: Vec<Option<f64>> = Vec::new();
     let mut saw_body = false;
+    // Counted so a `<p>` we cannot place in time is reported rather than
+    // skipped. Partial lyrics are worse than none: they look like the song has
+    // no first verse, and the fallback to LRCLIB never gets a chance to run.
+    let mut unparsable_lines = 0usize;
 
     loop {
         match reader.read_event() {
@@ -77,8 +118,13 @@ pub fn to_enhanced_lrc(xml: &str) -> Result<String> {
                 match name.as_str() {
                     "body" => saw_body = true,
                     "p" => {
+                        let raw = attr(&e, "begin");
+                        let begin = raw.as_deref().and_then(parse_time);
+                        if begin.is_none() {
+                            unparsable_lines += 1;
+                        }
                         line = Some(Line {
-                            begin: attr(&e, "begin").and_then(|v| lrc::parse_clock(&v)),
+                            begin,
                             ..Default::default()
                         });
                     }
@@ -89,8 +135,8 @@ pub fn to_enhanced_lrc(xml: &str) -> Result<String> {
                             span_stack.push(None);
                             continue;
                         }
-                        let begin = attr(&e, "begin").and_then(|v| lrc::parse_clock(&v));
-                        let end = attr(&e, "end").and_then(|v| lrc::parse_clock(&v));
+                        let begin = attr(&e, "begin").and_then(|v| parse_time(&v));
+                        let end = attr(&e, "end").and_then(|v| parse_time(&v));
                         if let (Some(l), Some(b)) = (line.as_mut(), begin) {
                             l.body.push_str(&format!("<{}>", format_time(b)));
                             l.words += 1;
@@ -155,6 +201,12 @@ pub fn to_enhanced_lrc(xml: &str) -> Result<String> {
     }
     if out.trim().is_empty() {
         return Err(anyhow!("TTML document contained no timed lines"));
+    }
+    if unparsable_lines > 0 {
+        return Err(anyhow!(
+            "{unparsable_lines} line(s) had a time this parser does not understand; \
+             refusing to show partial lyrics"
+        ));
     }
     Ok(out)
 }

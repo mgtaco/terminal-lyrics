@@ -153,3 +153,33 @@ fn a_cache_with_nowhere_to_write_degrades_quietly() {
     assert!(cache.get("k").is_none());
     assert!(cache.dir().is_none());
 }
+
+#[test]
+fn entries_written_by_an_older_version_are_not_served() {
+    // Cached lyrics outlive the code that wrote them. When a parser bug is
+    // fixed, a stale hit would keep serving the broken result forever, so the
+    // version stamp must invalidate it.
+    let dir = std::env::temp_dir().join(format!("lyrics-version-test-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+
+    let cache = Cache::new(Some(dir.clone()));
+    cache.put_hit("k", "label", "[00:10.00]words", None, true);
+
+    // Rewrite the stored entry as if an older build had produced it.
+    let file = std::fs::read_dir(&dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .find(|p| p.extension().is_some_and(|x| x == "json"))
+        .expect("entry should exist");
+    let text = std::fs::read_to_string(&file).unwrap();
+    std::fs::write(&file, text.replace("\"version\":2", "\"version\":1")).unwrap();
+
+    assert!(
+        cache.get("k").is_none(),
+        "an entry from an older version must be refetched, not served"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}

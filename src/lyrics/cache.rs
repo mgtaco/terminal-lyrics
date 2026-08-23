@@ -13,7 +13,9 @@ use super::{Found, Source};
 use crate::lrc;
 
 const MISS_TTL: Duration = Duration::from_secs(24 * 60 * 60);
-const CACHE_VERSION: u32 = 1;
+/// Bumped to 2: entries written before the TTML time-format fix are missing
+/// every lyric line under a minute, and a stale hit would keep serving them.
+const CACHE_VERSION: u32 = 2;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Entry {

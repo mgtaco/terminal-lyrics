@@ -124,7 +124,7 @@ clipped; nothing is ever truncated.
 ## Development
 
 ```bash
-cargo test                      # 85 tests, no terminal or player needed
+cargo test                      # 90 tests, no terminal or player needed
 cargo clippy --all-targets -- -D warnings
 cargo run --example pump_dump -- 15   # dump the live player event stream
 ```

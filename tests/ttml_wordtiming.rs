@@ -126,3 +126,57 @@ fn non_spotify_keys_are_rejected_rather_than_fetched() {
     // Right length, wrong alphabet.
     assert_eq!(spotify_track_id("!!!!!!!!!!!!!!!!!!!!!!"), None);
 }
+
+#[test]
+fn bare_seconds_are_a_valid_time_not_a_dropped_line() {
+    // The bug this guards: AMLL writes `4.658` below a minute and `1:04.579`
+    // above it, in the same file. Requiring a colon silently dropped every
+    // line in the first minute, so songs appeared to start at the second verse.
+    assert_eq!(ttml::parse_time("4.658"), Some(4.658));
+    assert_eq!(ttml::parse_time("1:04.579"), Some(64.579));
+    assert_eq!(ttml::parse_time("00:04.658"), Some(4.658));
+    assert_eq!(ttml::parse_time("01:02:03.500"), Some(3723.5));
+}
+
+#[test]
+fn offset_times_with_metric_suffixes_are_understood() {
+    assert_eq!(ttml::parse_time("4.658s"), Some(4.658));
+    assert_eq!(ttml::parse_time("250ms"), Some(0.25));
+    assert_eq!(ttml::parse_time("2m"), Some(120.0));
+    assert_eq!(ttml::parse_time("1h"), Some(3600.0));
+    // Frames and ticks need a frame rate these files do not carry; guessing
+    // would put words at the wrong moment.
+    assert_eq!(ttml::parse_time("10f"), None);
+    assert_eq!(ttml::parse_time("10t"), None);
+    assert_eq!(ttml::parse_time(""), None);
+    assert_eq!(ttml::parse_time("soon"), None);
+}
+
+#[test]
+fn a_file_mixing_both_time_formats_keeps_every_line() {
+    let a2 = ttml::to_enhanced_lrc(&fixture("mixed_timeformat.ttml")).unwrap();
+    let parsed = lrc::parse(&a2);
+    assert_eq!(parsed.lines.len(), 84, "every line must survive");
+    // The first verse, which used to vanish entirely.
+    assert_eq!(parsed.lines[0].text, "I threw a wish in the well");
+    assert!((parsed.lines[0].start - 4.658).abs() < 0.001);
+    assert!(parsed.has_word_timings());
+
+    // Lines must be continuous from the start, not begin a minute in.
+    assert!(
+        parsed.lines.iter().take(20).all(|l| l.start < 60.0),
+        "early lines are missing"
+    );
+}
+
+#[test]
+fn an_unparsable_time_fails_loudly_instead_of_dropping_the_line() {
+    // Better to fall back to LRCLIB's complete line-level lyrics than to show
+    // a song with a hole in it.
+    let xml = r#"<tt xmlns="http://www.w3.org/ns/ttml"><body><div>
+      <p begin="00:01.000"><span begin="00:01.000" end="00:02.000">fine</span></p>
+      <p begin="17f"><span begin="17f" end="18f">broken</span></p>
+    </div></body></tt>"#;
+    let err = ttml::to_enhanced_lrc(xml).unwrap_err().to_string();
+    assert!(err.contains("partial"), "unhelpful error: {err}");
+}
