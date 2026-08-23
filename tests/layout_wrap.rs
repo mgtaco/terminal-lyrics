@@ -119,6 +119,7 @@ fn rendering_fills_exactly_the_area_it_was_given() {
         &Screen::Lyric {
             text: "HELLO",
             highlight: 0,
+            reveal: 5,
         },
         &f,
         80,
@@ -144,6 +145,7 @@ fn the_highlight_splits_the_line_at_the_right_character() {
         &Screen::Lyric {
             text: "abcdef",
             highlight: 3,
+            reveal: 6,
         },
         &f,
         20,
@@ -171,6 +173,7 @@ fn a_blank_lyric_line_renders_nothing() {
         &Screen::Lyric {
             text: "   ",
             highlight: 0,
+            reveal: 3,
         },
         &f,
         80,
@@ -189,10 +192,64 @@ fn a_one_column_terminal_does_not_panic() {
         &Screen::Lyric {
             text: "HELLO WORLD",
             highlight: 2,
+            reveal: 11,
         },
         &f,
         1,
         1,
         Theme::default(),
     );
+}
+
+/// One rendered row flattened back into the characters on screen.
+fn row_text(line: &ratatui::text::Line<'_>) -> String {
+    line.spans.iter().map(|s| s.content.as_ref()).collect()
+}
+
+#[test]
+fn a_partly_revealed_word_holds_the_place_of_the_whole_one() {
+    // A word timed in syllables is drawn a piece at a time. Laying out only the
+    // pieces sung so far would centre a fragment, and the word would crawl
+    // sideways as it filled in. It must sit still.
+    let f = font::mini();
+    let theme = Theme::default();
+    let whole = render(
+        &Screen::Lyric {
+            text: "believe",
+            highlight: 0,
+            reveal: 7,
+        },
+        &f,
+        40,
+        3,
+        theme,
+    );
+    let part = render(
+        &Screen::Lyric {
+            text: "believe",
+            highlight: 0,
+            reveal: 2,
+        },
+        &f,
+        40,
+        3,
+        theme,
+    );
+
+    assert_eq!(whole.lines.len(), part.lines.len(), "same rows");
+    let mut inked_whole = 0usize;
+    let mut inked_part = 0usize;
+    for (w, p) in whole.lines.iter().zip(part.lines.iter()) {
+        let (w, p) = (row_text(w), row_text(p));
+        assert_eq!(w.len(), p.len(), "the row changed width as the word filled");
+        for (col, (a, b)) in w.chars().zip(p.chars()).enumerate() {
+            inked_whole += usize::from(!a.is_whitespace());
+            inked_part += usize::from(!b.is_whitespace());
+            if !b.is_whitespace() {
+                assert_eq!(a, b, "column {col} moved");
+            }
+        }
+    }
+    assert!(inked_part > 0, "the sung syllable must be drawn");
+    assert!(inked_part < inked_whole, "the rest must be held back");
 }

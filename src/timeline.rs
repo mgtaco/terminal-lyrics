@@ -19,6 +19,27 @@ pub enum Position {
     Outro,
 }
 
+/// The word being sung: the whole word, plus how much of it has been reached.
+///
+/// The two differ when a source times a long word in syllables. The word is
+/// laid out whole so it sits where it will finally sit, and revealed a syllable
+/// at a time — showing only the sung syllables would put a bare fragment on the
+/// screen, and laying out only those would make the word crawl as it grew.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ActiveWord {
+    /// Char range of the whole word in [`crate::lrc::Line::text`].
+    pub range: Range<usize>,
+    /// End of the syllable reached so far, as a char index into the line.
+    pub sung_to: usize,
+}
+
+impl ActiveWord {
+    /// How many of the word's characters have been reached.
+    pub fn revealed(&self) -> usize {
+        self.sung_to.saturating_sub(self.range.start)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Timeline {
     lyrics: Lyrics,
@@ -64,30 +85,24 @@ impl Timeline {
         Position::Line { index: idx }
     }
 
-    /// The word being sung within line `index`, as far as it has been sung, as a
-    /// char range into [`crate::lrc::Line::text`].
-    ///
-    /// When a source times a long word in syllables the range starts at the
-    /// word's first syllable, not the syllable being sung: the word builds up —
-    /// `be`, then `believe` — instead of the screen showing a bare `lieve` that
-    /// is not a word at all.
+    /// The word being sung within line `index`, and how far into it the singing
+    /// has got.
     ///
     /// `None` before the first word starts. Inside a gap between words the
     /// previous word is kept rather than blanking the screen — the gaps are
     /// real (word-timed sources record them) and flashing through them would be
     /// worse than holding.
-    pub fn active_word(&self, index: usize, pos: f64) -> Option<Range<usize>> {
+    pub fn active_word(&self, index: usize, pos: f64) -> Option<ActiveWord> {
         let line = self.lyrics.lines.get(index)?;
         let started = line.words.partition_point(|w| w.start <= pos);
         if started == 0 {
             return None;
         }
         let cur = started - 1;
-        let mut first = cur;
-        while line.continues_word(first) {
-            first -= 1;
-        }
-        Some(line.words[first].range.start..line.words[cur].range.end)
+        Some(ActiveWord {
+            range: line.word_bounds(cur)?,
+            sung_to: line.words[cur].range.end,
+        })
     }
 
     /// How far the highlight has travelled across line `index`, in characters.

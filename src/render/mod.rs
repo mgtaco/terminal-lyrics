@@ -37,8 +37,17 @@ impl Default for Theme {
 /// What the screen should show right now.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Screen<'a> {
-    /// A lyric line, with `highlight` characters already sung.
-    Lyric { text: &'a str, highlight: usize },
+    /// A lyric line.
+    ///
+    /// `highlight` is how many characters the sweep has passed. `reveal` is how
+    /// many are drawn at all: a word timed in syllables is laid out whole, so it
+    /// sits where it will finally sit, but only the syllables reached so far are
+    /// inked. The rest holds its space blank instead of shifting the word.
+    Lyric {
+        text: &'a str,
+        highlight: usize,
+        reveal: usize,
+    },
     /// Track known, lyrics being looked up.
     Searching { label: &'a str },
     /// Looked up, nothing found.
@@ -53,12 +62,16 @@ pub fn render(screen: &Screen<'_>, font: &Font, width: u16, height: u16, theme: 
     let height = height as usize;
 
     match screen {
-        Screen::Lyric { text, highlight } => {
+        Screen::Lyric {
+            text,
+            highlight,
+            reveal,
+        } => {
             if text.trim().is_empty() {
                 return Text::default();
             }
             let (layout, used) = layout::layout_fitting(text, font, width, height, LINE_GAP);
-            block_text(&layout, &used, *highlight, width, height, theme)
+            block_text(&layout, &used, *highlight, *reveal, width, height, theme)
         }
         Screen::Searching { label } => status_text(label, "searching for lyrics", width, height, theme),
         Screen::NoLyrics { label } => status_text(label, "no lyrics found", width, height, theme),
@@ -70,6 +83,7 @@ fn block_text(
     layout: &Layout,
     font: &Font,
     highlight: usize,
+    reveal: usize,
     width: usize,
     height: usize,
     theme: Theme,
@@ -93,7 +107,11 @@ fn block_text(
                     spans.push(Span::raw(" ".repeat(font.tracking())));
                 }
                 let art = cell.rows.get(row).cloned().unwrap_or_default();
-                let art = pad_to(&art, cell.width);
+                // Not reached yet: hold the space, draw nothing in it.
+                let art = match cell.src < reveal {
+                    true => pad_to(&art, cell.width),
+                    false => " ".repeat(cell.width),
+                };
                 let style = if cell.src < highlight {
                     Style::default().fg(theme.sung).add_modifier(Modifier::BOLD)
                 } else {

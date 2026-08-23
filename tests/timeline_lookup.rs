@@ -98,13 +98,13 @@ const WORDED: &str = "[00:10.00]<00:10.00>one<00:10.50> <00:11.00>two<00:11.50> 
 fn the_active_word_tracks_the_position() {
     let t = tl(WORDED);
     let word = |pos: f64| {
-        t.active_word(0, pos).map(|r| {
+        t.active_word(0, pos).map(|w| {
             t.line(0)
                 .unwrap()
                 .text
                 .chars()
-                .skip(r.start)
-                .take(r.end - r.start)
+                .skip(w.range.start)
+                .take(w.range.len())
                 .collect::<String>()
         })
     };
@@ -120,14 +120,14 @@ fn a_gap_between_words_holds_the_previous_one() {
     // "one" ends at 10.5 but "two" starts at 11.0. Blanking the screen through
     // that half second would read as a flicker, so the word is held.
     let t = tl(WORDED);
-    let range = t.active_word(0, 10.75).expect("should hold a word");
+    let word = t.active_word(0, 10.75).expect("should hold a word");
     let text: String = t
         .line(0)
         .unwrap()
         .text
         .chars()
-        .skip(range.start)
-        .take(range.end - range.start)
+        .skip(word.range.start)
+        .take(word.range.len())
         .collect();
     assert_eq!(text, "one");
 }
@@ -146,9 +146,9 @@ fn the_highlight_offset_rebases_onto_the_active_word() {
     let t = tl(WORDED);
     // Midway through "two" (11.0..11.5): absolute offset sits inside 4..7.
     let abs = t.highlight_chars(0, 11.25);
-    let range = t.active_word(0, 11.25).unwrap();
-    assert_eq!(range, 4..7, "\"two\" occupies chars 4..7 of \"one two three\"");
-    let relative = abs.saturating_sub(range.start);
+    let word = t.active_word(0, 11.25).unwrap();
+    assert_eq!(word.range, 4..7, "\"two\" occupies chars 4..7 of \"one two three\"");
+    let relative = abs.saturating_sub(word.range.start);
     assert!(relative <= 3, "highlight must stay inside the word, got {relative}");
     assert!(relative >= 1, "and must have advanced into it, got {relative}");
 }
@@ -156,15 +156,16 @@ fn the_highlight_offset_rebases_onto_the_active_word() {
 const SYLLABLES: &str =
     "[00:10.00]<00:10.00>be<00:10.40>lieve<00:10.90> <00:11.00>it<00:11.40>\n[00:20.00]after\n";
 
+/// The part of the word that is inked: laid out whole, revealed as far as sung.
 fn shown(t: &Timeline, pos: f64) -> Option<String> {
-    let r = t.active_word(0, pos)?;
+    let w = t.active_word(0, pos)?;
     Some(
         t.line(0)
             .unwrap()
             .text
             .chars()
-            .skip(r.start)
-            .take(r.end - r.start)
+            .skip(w.range.start)
+            .take(w.revealed())
             .collect(),
     )
 }
@@ -186,9 +187,9 @@ fn a_syllable_timed_word_builds_up_instead_of_being_replaced() {
 fn the_highlight_keeps_up_with_a_word_that_is_still_growing() {
     let t = tl(SYLLABLES);
     // Midway through "lieve" (10.40..10.90), which is chars 2..7 of the line.
-    let range = t.active_word(0, 10.65).unwrap();
-    assert_eq!(range, 0..7, "the whole word so far");
-    let relative = t.highlight_chars(0, 10.65).saturating_sub(range.start);
+    let word = t.active_word(0, 10.65).unwrap();
+    assert_eq!(word.range, 0..7, "laid out as the whole word");
+    let relative = t.highlight_chars(0, 10.65).saturating_sub(word.range.start);
     assert!(
         (3..=7).contains(&relative),
         "the highlight must be past \"be\" and inside the word, got {relative}"

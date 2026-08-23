@@ -213,6 +213,7 @@ fn draw(terminal: &mut DefaultTerminal, app: &App) -> Result<()> {
         // Held so the borrow lives as long as `screen`.
         let mut line_text = String::new();
         let mut highlight = 0usize;
+        let mut reveal = 0usize;
 
         let screen = match &app.state {
             LyricState::Idle => Screen::Idle {
@@ -237,32 +238,40 @@ fn draw(terminal: &mut DefaultTerminal, app: &App) -> Result<()> {
                         // lines must still appear in full rather than vanish.
                         let split = app.cfg.word_by_word && !line.words.is_empty();
 
-                        line_text = match split {
-                            // A syllable-timed word grows a syllable at a time
-                            // rather than being replaced by each new piece.
-                            true => match timeline.active_word(index, pos) {
-                                Some(range) => {
-                                    // The highlight is an offset into the whole
-                                    // line; rebase it onto the word on screen.
-                                    highlight = highlight.saturating_sub(range.start);
-                                    line
-                                        .text
-                                        .chars()
-                                        .skip(range.start)
-                                        .take(range.end - range.start)
-                                        .collect()
-                                }
+                        match split {
+                            // The whole word is handed to the renderer even when
+                            // only some of its syllables have been sung, so it is
+                            // laid out at its final size and stays put as it
+                            // fills in. Passing just the sung part would centre a
+                            // fragment, and the word would crawl sideways with
+                            // every syllable.
+                            true => {
                                 // The line has started but its first word has
                                 // not; hold the screen rather than flashing the
                                 // whole line for a frame.
-                                None => String::new(),
-                            },
-                            false => line.text.clone(),
-                        };
+                                if let Some(word) = timeline.active_word(index, pos) {
+                                    // The highlight is an offset into the whole
+                                    // line; rebase it onto the word on screen.
+                                    highlight = highlight.saturating_sub(word.range.start);
+                                    reveal = word.revealed();
+                                    line_text = line
+                                        .text
+                                        .chars()
+                                        .skip(word.range.start)
+                                        .take(word.range.len())
+                                        .collect();
+                                }
+                            }
+                            false => {
+                                line_text = line.text.clone();
+                                reveal = line.char_len();
+                            }
+                        }
                     }
                     Screen::Lyric {
                         text: &line_text,
                         highlight,
+                        reveal,
                     }
                 }
                 // During the intro and the outro, show whose song it is.
