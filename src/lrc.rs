@@ -21,7 +21,10 @@ use std::ops::Range;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Word {
     pub start: f64,
-    /// Filled in during finalisation: the next word's start, or the next line's.
+    /// When the word stops being highlighted. A trailing `<mm:ss.xx>` tag sets
+    /// this explicitly; otherwise finalisation fills in the next word's start.
+    /// The difference matters when a source records a real gap between words —
+    /// without it the highlight smears across the pause.
     pub end: f64,
     /// Char range of this word inside [`Line::text`], for highlighting.
     pub range: Range<usize>,
@@ -99,8 +102,9 @@ fn parse_timestamp(s: &[char], i: usize) -> Option<(f64, usize)> {
 }
 
 /// `mm:ss`, `mm:ss.xx`, `hh:mm:ss.xx` → seconds. Rejects anything else, which is
-/// what keeps `[ti:Song]` from being read as a time.
-fn parse_clock(body: &str) -> Option<f64> {
+/// what keeps `[ti:Song]` from being read as a time. Shared with the TTML
+/// converter, which uses the same clock syntax.
+pub fn parse_clock(body: &str) -> Option<f64> {
     let mut parts = body.split(':');
     let a = parts.next()?;
     let b = parts.next()?;
@@ -202,6 +206,9 @@ fn parse_body(rest: &[char]) -> Body {
 
 /// Record a word spanning `from..to` (char indices), skipping the whitespace
 /// that separates it from the next one so the highlight lands on the word.
+///
+/// A tag with no visible text behind it is an *end* tag: it closes the previous
+/// word rather than opening a new one.
 fn push_word(words: &mut Vec<Word>, text: &str, start: f64, from: usize, to: usize) {
     let chars: Vec<char> = text.chars().collect();
     let mut end = to;
@@ -209,7 +216,12 @@ fn push_word(words: &mut Vec<Word>, text: &str, start: f64, from: usize, to: usi
         end -= 1;
     }
     if end <= from {
-        return; // tag with no visible text behind it
+        if let Some(prev) = words.last_mut()
+            && start >= prev.start
+        {
+            prev.end = start;
+        }
+        return;
     }
     words.push(Word {
         start,
@@ -305,6 +317,10 @@ fn finalise(mut lines: Vec<Line>, meta: Meta) -> Lyrics {
         let line_end = line.end;
         let count = line.words.len();
         for w in 0..count {
+            // An end tag already set this; only fill in the ones still open.
+            if line.words[w].end.is_finite() {
+                continue;
+            }
             let end = if w + 1 < count {
                 line.words[w + 1].start
             } else {

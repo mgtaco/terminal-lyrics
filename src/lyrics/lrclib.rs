@@ -13,8 +13,7 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 
 use super::cache::Cache;
-use super::normalize;
-use super::{Found, Outcome, Source};
+use super::{Found, Outcome, Source, amll, normalize};
 use crate::lrc;
 use crate::player::Track;
 
@@ -76,6 +75,13 @@ impl Record {
 
 pub struct LrcLib {
     http: reqwest::Client,
+}
+
+impl LrcLib {
+    /// The shared HTTP client, so other providers do not each build their own.
+    pub fn http(&self) -> &reqwest::Client {
+        &self.http
+    }
 }
 
 impl LrcLib {
@@ -251,14 +257,31 @@ pub async fn lookup(
         });
     }
 
-    let found = fetch(
-        client,
-        &track.artist,
-        &track.title,
-        track.album.as_deref(),
-        track.length,
-    )
-    .await?;
+    // Word-timed lyrics first. AMLL is keyed by the Spotify ID we already hold,
+    // so this costs one request and no matching guesswork; LRCLIB then covers
+    // everything AMLL does not have, which is most things.
+    let found = match amll::spotify_track_id(key) {
+        Some(id) => amll::fetch(client.http(), id).await.unwrap_or_else(|e| {
+            // A network blip here must not cost the user LRCLIB's answer.
+            debug(&format!("amll lookup failed: {e:#}"));
+            None
+        }),
+        None => None,
+    };
+
+    let found = match found {
+        Some(found) => Some(found),
+        None => {
+            fetch(
+                client,
+                &track.artist,
+                &track.title,
+                track.album.as_deref(),
+                track.length,
+            )
+            .await?
+        }
+    };
 
     match found {
         Some(found) => {
@@ -273,5 +296,11 @@ pub async fn lookup(
             cache.put_miss(key, &track.label());
             Ok(Outcome::Missing)
         }
+    }
+}
+
+fn debug(msg: &str) {
+    if std::env::var_os("LYRICS_DEBUG").is_some() {
+        eprintln!("[lyrics] {msg}");
     }
 }

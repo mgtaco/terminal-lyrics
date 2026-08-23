@@ -15,7 +15,7 @@ offset_ms = 0
 # Check this directory for "Artist - Title.lrc" before querying the network.
 # lrc_dir = "~/lyrics"
 
-# Set false to use only the cache and lrc_dir.
+# Set false to use only the cache and lrc_dir — no AMLL, no LRCLIB.
 network = true
 
 # When to highlight individual words as they are sung.

@@ -70,6 +70,10 @@ pub enum Command {
         /// Track length in seconds; greatly improves match accuracy.
         #[arg(long)]
         duration: Option<f64>,
+        /// Spotify track ID or URL. When given, the word-timed AMLL database
+        /// is tried first, exactly as it is for a live track.
+        #[arg(long, value_name = "ID_OR_URL")]
+        spotify_id: Option<String>,
     },
     /// Print the paths this build reads and writes.
     Paths,

@@ -4,9 +4,11 @@
 //! LRCLIB. Everything is async and runs off the UI task, so a slow network
 //! never freezes the display.
 
+pub mod amll;
 pub mod cache;
 pub mod lrclib;
 pub mod normalize;
+pub mod ttml;
 
 use std::path::{Path, PathBuf};
 
@@ -19,6 +21,8 @@ pub enum Source {
     LocalFile(PathBuf),
     Cache,
     LrcLib { id: i64 },
+    /// The AMLL TTML database — the word-timed source.
+    Amll,
 }
 
 impl std::fmt::Display for Source {
@@ -27,6 +31,7 @@ impl std::fmt::Display for Source {
             Source::LocalFile(p) => write!(f, "file {}", p.display()),
             Source::Cache => write!(f, "cache"),
             Source::LrcLib { id } => write!(f, "lrclib #{id}"),
+            Source::Amll => write!(f, "amll"),
         }
     }
 }

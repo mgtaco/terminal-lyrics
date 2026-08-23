@@ -29,9 +29,9 @@ directly and TLS is pure Rust, so there is nothing to install alongside it.
 lyrics
 ```
 
-It finds your MPRIS player, reads what is playing, downloads synced lyrics from
-[LRCLIB](https://lrclib.net), and displays them a phrase at a time in block
-letters, with a highlight sweeping across each line as it is sung.
+It finds your MPRIS player, reads what is playing, downloads synced lyrics, and
+displays them a phrase at a time in block letters. Where the lyrics carry real
+per-word timings, a highlight follows the words as they are sung.
 
 | key | |
 |---|---|
@@ -54,6 +54,8 @@ timed badly, `--lrc-dir ~/lyrics` to prefer your own `Artist - Title.lrc` files,
 ```bash
 lyrics status                 # player, track, position, and which source matched
 lyrics fetch --artist "Radiohead" --title "Creep" --duration 238
+lyrics fetch --artist "Kanye West" --title "Flashing Lights" \
+             --spotify-id 5TRPicyLGbAF2LGBFbHGvO   # word-timed, via AMLL
 lyrics paths                  # where the config and cache live
 ```
 
@@ -74,16 +76,26 @@ interpolated from a monotonic clock. Property changes and `Seeked` re-anchor it;
 a 1 Hz `Position` read catches players that seek without saying so — Spotify
 among them. No subprocesses.
 
-**Lookup.** `--lrc-dir` first, then the cache, then LRCLIB: an exact `/api/get`
-with artist, title, album and duration, then without the album, then a scored
-`/api/search`, then a retry with `- Remastered 2011` and `(feat. …)` stripped.
+**Sources.** `--lrc-dir` first, then the cache, then two networks in order:
+
+* the [AMLL TTML database](https://github.com/amll-dev/amll-ttml-db) — CC0,
+  community-maintained, **word-by-word**, and keyed by the Spotify track ID the
+  player already hands us, so it needs no search and no matching guesswork.
+  Around 2,400 tracks, so it is tried first and misses often.
+* [LRCLIB](https://lrclib.net) — millions of tracks, line-level only. Every
+  `syncedLyrics` entry sampled (923 of them) was line-level, which is why the
+  word highlight needs the first source to be worth having.
+
+**Matching LRCLIB.** An exact `/api/get` with artist, title, album and duration,
+then without the album, then a scored `/api/search`, then a retry with
+`- Remastered 2011` and `(feat. …)` stripped.
 Candidates more than five seconds from the track's real length are rejected
 rather than shown out of sync. Misses are cached for a day so a track LRCLIB has
 never heard of is not re-queried on every play.
 
 **Word timing.** The word highlight follows the lyrics, not a preference. By
 default (`sweep = "auto"`) it appears only for sources that carry real per-word
-timestamps, and stays off for line-level ones — where moving it would mean
+timestamps — in practice, AMLL hits — and stays off for line-level ones — where moving it would mean
 animating a guess. `--sweep` forces it on anyway, interpolating across the
 phrase between its two real timestamps weighted by character count; `--no-sweep`
 forces it off. `lyrics status` says which you have and whether the highlight
@@ -97,7 +109,7 @@ clipped; nothing is ever truncated.
 ## Development
 
 ```bash
-cargo test                      # 61 tests, no terminal or player needed
+cargo test                      # 73 tests, no terminal or player needed
 cargo clippy --all-targets -- -D warnings
 cargo run --example pump_dump -- 15   # dump the live player event stream
 ```
@@ -109,10 +121,12 @@ driven at arbitrary "times" without sleeping.
 
 ## Limitations
 
-* Lyrics come from LRCLIB. Anything not in it will not be found, and `r` will
-  not conjure it.
-* Most LRCLIB entries are line-level, so the within-line sweep is usually an
-  interpolation rather than real word timing. `lyrics status` says which you got.
+* Word-timed lyrics only exist for what is in the AMLL database — a couple of
+  thousand tracks. Everything else falls back to LRCLIB's line-level entries and
+  shows no moving highlight. `lyrics status` says which you got.
+* AMLL is keyed by Spotify track ID, so the word-timed path only applies when
+  the player reports one. Other players still get LRCLIB.
+* Anything in neither source will not be found, and `r` will not conjure it.
 * MPRIS only. A player that does not expose an MPRIS interface is invisible.
 
 ## License

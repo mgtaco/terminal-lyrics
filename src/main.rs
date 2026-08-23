@@ -44,7 +44,18 @@ async fn main() -> Result<()> {
             title,
             album,
             duration,
-        }) => cmd_fetch(&cfg, &artist, &title, album.as_deref(), duration).await,
+            spotify_id,
+        }) => {
+            cmd_fetch(
+                &cfg,
+                &artist,
+                &title,
+                album.as_deref(),
+                duration,
+                spotify_id.as_deref(),
+            )
+            .await
+        }
         Some(Command::Status) => cmd_status(&cfg).await,
         None => cmd_run(cfg).await,
     }
@@ -65,11 +76,24 @@ async fn cmd_fetch(
     title: &str,
     album: Option<&str>,
     duration: Option<f64>,
+    spotify_id: Option<&str>,
 ) -> Result<()> {
     let Some(client) = client_for(cfg)? else {
         anyhow::bail!("--no-network is set, so there is nothing to fetch from");
     };
-    match lrclib::fetch(&client, artist, title, album, duration).await? {
+
+    // Same order the live path uses: word-timed source first, then LRCLIB.
+    let from_amll = match spotify_id.and_then(terminal_lyrics::lyrics::amll::spotify_track_id) {
+        Some(id) => terminal_lyrics::lyrics::amll::fetch(client.http(), id).await?,
+        None => None,
+    };
+
+    let found = match from_amll {
+        Some(found) => Some(found),
+        None => lrclib::fetch(&client, artist, title, album, duration).await?,
+    };
+
+    match found {
         Some(found) => {
             eprintln!(
                 "# {} · {} · {} lines",

@@ -129,3 +129,24 @@ fn empty_input_is_empty_not_a_panic() {
     assert!(l.is_empty());
     assert!(!l.has_word_timings());
 }
+
+#[test]
+fn a_trailing_word_tag_closes_the_previous_word() {
+    // A2 end tags. Without them a real pause between words is invisible and
+    // the highlight slides through it.
+    let l = lrc::parse("[00:10.00]<00:10.00>Flashing<00:10.60> <00:11.00>Lights<00:12.50>\n[00:20.00]next\n");
+    let words = &l.lines[0].words;
+    assert_eq!(words.len(), 2, "an end tag must not become a word");
+    assert_eq!(l.lines[0].text, "Flashing Lights");
+    assert_eq!((words[0].start, words[0].end), (10.0, 10.6));
+    assert_eq!((words[1].start, words[1].end), (11.0, 12.5));
+}
+
+#[test]
+fn words_without_end_tags_still_run_to_the_next_one() {
+    let l = lrc::parse("[00:10.00]<00:10.00>one <00:11.00>two\n[00:15.00]next\n");
+    let words = &l.lines[0].words;
+    assert_eq!((words[0].start, words[0].end), (10.0, 11.0));
+    // The last word runs to the end of its line.
+    assert_eq!(words[1].end, l.lines[0].end);
+}
