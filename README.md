@@ -73,6 +73,13 @@ test asserting that per field.
 
 ## How it works
 
+**Choosing a player.** With no `--player`, the one that is actually playing
+wins, then one with a track loaded, then anything else, with the name as a
+stable tiebreak. Taking the first name alphabetically is wrong in practice:
+browsers register idle MPRIS instances (`chromium.instance26065`) that sort
+before `spotify` and report no track. `lyrics status` lists what each player is
+doing.
+
 **Position.** The player is asked once, and after that the position is
 interpolated from a monotonic clock. Property changes and `Seeked` re-anchor it;
 a 1 Hz `Position` read catches players that seek without saying so — Spotify
@@ -115,7 +122,7 @@ clipped; nothing is ever truncated.
 ## Development
 
 ```bash
-cargo test                      # 79 tests, no terminal or player needed
+cargo test                      # 85 tests, no terminal or player needed
 cargo clippy --all-targets -- -D warnings
 cargo run --example pump_dump -- 15   # dump the live player event stream
 ```

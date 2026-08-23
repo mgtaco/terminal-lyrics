@@ -120,15 +120,25 @@ async fn cmd_status(cfg: &Config) -> Result<()> {
         .await
         .context("could not reach the session bus")?;
 
-    let players = mpris::list_players(&conn).await?;
-    println!(
-        "players   {}",
-        if players.is_empty() {
-            "(none)".to_string()
-        } else {
-            players.join(", ")
-        }
-    );
+    // Show what each player is doing, so "it followed the wrong one" is
+    // answerable at a glance.
+    let survey = mpris::survey(&conn).await?;
+    if survey.is_empty() {
+        println!("players   (none)");
+    } else {
+        let described: Vec<String> = survey
+            .iter()
+            .map(|p| {
+                let what = match (p.playing, p.has_track) {
+                    (true, true) => "playing",
+                    (false, true) => "paused",
+                    (_, false) => "no track",
+                };
+                format!("{} ({what})", p.name)
+            })
+            .collect();
+        println!("players   {}", described.join(", "));
+    }
 
     let name = mpris::resolve_player(&conn, cfg.player.as_deref()).await?;
     println!("following {name}");

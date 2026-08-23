@@ -164,6 +164,52 @@ pub async fn list_players(conn: &Connection) -> Result<Vec<String>> {
     Ok(names)
 }
 
+/// What a candidate player looks like right now, for ranking.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlayerState {
+    pub name: String,
+    pub playing: bool,
+    pub has_track: bool,
+}
+
+/// Choose between players when the user has not named one.
+///
+/// Taking the first name alphabetically is wrong in practice: a browser
+/// registers an idle `org.mpris.MediaPlayer2.chromium.instance…` that sorts
+/// before `spotify` and reports no track at all, so the visualiser would follow
+/// silence while music played next to it. Something actually playing wins.
+pub fn rank_players(mut candidates: Vec<PlayerState>) -> Option<PlayerState> {
+    fn score(p: &PlayerState) -> u8 {
+        match (p.playing, p.has_track) {
+            (true, true) => 3,
+            (false, true) => 2,
+            (true, false) => 1,
+            (false, false) => 0,
+        }
+    }
+    // Name as the tiebreak, so the choice is stable between runs.
+    candidates.sort_by(|a, b| score(b).cmp(&score(a)).then_with(|| a.name.cmp(&b.name)));
+    candidates.into_iter().next()
+}
+
+/// Ask every player on the bus what it is doing.
+pub async fn survey(conn: &Connection) -> Result<Vec<PlayerState>> {
+    let names = list_players(conn).await?;
+    let mut out = Vec::with_capacity(names.len());
+    for name in names {
+        let (playing, has_track) = match MprisPlayerHandle::connect(conn, &name).await {
+            Ok(h) => (h.playing().await, h.track().await.is_some_and(|t| t.is_usable())),
+            Err(_) => (false, false),
+        };
+        out.push(PlayerState {
+            name,
+            playing,
+            has_track,
+        });
+    }
+    Ok(out)
+}
+
 /// Pick the player to follow. `wanted` matches case-insensitively on either the
 /// short name (`spotify`) or the full bus name.
 pub async fn resolve_player(conn: &Connection, wanted: Option<&str>) -> Result<String> {
@@ -174,7 +220,10 @@ pub async fn resolve_player(conn: &Connection, wanted: Option<&str>) -> Result<S
         ));
     }
     match wanted {
-        None => Ok(players[0].clone()),
+        None => {
+            let ranked = rank_players(survey(conn).await?);
+            Ok(ranked.map(|p| p.name).unwrap_or_else(|| players[0].clone()))
+        }
         Some(w) => {
             let w = w.trim().trim_start_matches(MPRIS_PREFIX);
             players
