@@ -3,7 +3,7 @@
 //! Two separate questions: which line is active (binary search), and how much of
 //! it has been sung (the sweep). The sweep is interpolated when the source has
 //! no word tags — that interpolation is display-only and is never written back
-//! out, which is the honest version of what v1 baked into `.wlrc` files.
+//! out. Guessed timings that get saved to disk stop looking like guesses.
 
 use std::ops::Range;
 

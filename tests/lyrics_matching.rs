@@ -20,7 +20,7 @@ fn rec(id: i64, title: &str, artist: &str, duration: f64, synced: bool) -> Recor
 #[test]
 fn duration_decides_between_same_titled_records() {
     // Modelled on the real response for "Kanye West – Flashing Lights": the
-    // first row is an 85s-longer edit. v1 took row zero and got the wrong song.
+    // first row is an 85s-longer edit, so taking row zero gets the wrong song.
     let results = vec![
         rec(1, "Flashing Lights", "Kanye West", 322.0, true),
         rec(2, "Flashing Lights", "Kanye West", 244.0, true),

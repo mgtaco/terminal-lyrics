@@ -1,7 +1,7 @@
 //! Turning one lyric line into rows of glyph art that fit the terminal.
 //!
-//! v1 rendered the whole line and then cut it to the terminal width, so a long
-//! line simply lost its end. Here the glyph run is wrapped at word boundaries,
+//! Rendering the whole line and then cutting it to the terminal width loses the
+//! end of every long line. Here the glyph run is wrapped at word boundaries,
 //! and if a single word is still too wide the font steps down before anything
 //! is discarded. Nothing is ever truncated.
 

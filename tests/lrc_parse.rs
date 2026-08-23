@@ -1,4 +1,4 @@
-//! Parser fixtures, including the two cases v1 got wrong.
+//! Parser fixtures, including the cases that are easiest to get wrong.
 
 use terminal_lyrics::lrc;
 
@@ -9,8 +9,8 @@ fn fixture(name: &str) -> String {
 
 #[test]
 fn accepts_timestamps_with_and_without_fractions() {
-    // v1 regression: `parse_lrc_simple` required `\d{2}\.\d{1,3}` and silently
-    // dropped `[00:10]`, so lines the processor emitted never reached the screen.
+    // A parser requiring `\d{2}\.\d{1,3}` silently drops `[00:10]`, so whole
+    // lines never reach the screen while the file looks perfectly valid.
     let l = lrc::parse(&fixture("plain.lrc"));
     let starts: Vec<f64> = l.lines.iter().map(|x| x.start).collect();
     assert_eq!(starts, vec![10.0, 14.5, 18.25, 22.75]);

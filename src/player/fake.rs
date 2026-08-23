@@ -1,8 +1,8 @@
 //! A scripted player, so the sync engine can be tested without a bus.
 //!
-//! v1 had no way to exercise its sync logic except by playing music and
-//! watching. Here a test writes a timeline of events and asserts on what the
-//! clock believed at each step.
+//! Sync logic that can only be exercised by playing music and watching is
+//! effectively untested. Here a test writes a timeline of events and asserts on
+//! what the clock believed at each step.
 
 use std::time::{Duration, Instant};
 

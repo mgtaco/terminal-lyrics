@@ -3,7 +3,7 @@
 //! The loop is woken by whichever comes first: a key, a player event, a lyrics
 //! lookup finishing, or the redraw tick. Only the tick is periodic, and all it
 //! does is advance the sweep — ratatui diffs the buffer, so an unchanged screen
-//! costs no output at all. v1 wrote a full clear plus a full screen every 50ms.
+//! costs no output at all, rather than reprinting everything on a timer.
 
 use std::time::{Duration, Instant};
 

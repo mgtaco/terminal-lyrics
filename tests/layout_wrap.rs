@@ -1,5 +1,5 @@
 //! Wrapping and centring. The load-bearing property is that no character is
-//! ever dropped — v1 clipped anything wider than the terminal.
+//! ever dropped, however narrow the terminal gets.
 
 use terminal_lyrics::render::layout::{Layout, layout, layout_fitting};
 use terminal_lyrics::render::{LINE_GAP, Screen, Theme, font, render};

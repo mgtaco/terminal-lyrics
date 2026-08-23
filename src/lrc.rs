@@ -1,8 +1,8 @@
 //! One LRC parser.
 //!
-//! v1 shipped two parsers with different regexes: one accepted `[00:10]`, the
-//! other silently dropped it, so lines that processed fine were invisible in the
-//! player. There is one parser here and it handles the whole dialect:
+//! Two parsers with subtly different regexes is an easy mistake to make and a
+//! miserable one to debug: lines that write out fine become invisible on
+//! playback. There is one parser here and it handles the whole dialect:
 //!
 //! * `[mm:ss]`, `[mm:ss.xx]`, `[mm:ss.xxx]` — fractional seconds optional
 //! * multiple timestamps on one line: `[00:10.00][01:20.00]same words`
@@ -12,8 +12,8 @@
 //! * `#` comments and blank lines
 //!
 //! Timestamped lines with no text are kept: in a well-made LRC they mark
-//! instrumental gaps, and dropping them (as v1 did) leaves the previous line
-//! frozen on screen through the whole break.
+//! instrumental gaps, and dropping them leaves the previous line frozen on
+//! screen through the whole break.
 
 use std::ops::Range;
 

@@ -1,7 +1,8 @@
 //! Configuration: defaults < config file < command-line flags.
 //!
-//! v1's central defect was options that were parsed and printed but never read.
-//! The countermeasure here is structural: there is exactly one merge function,
+//! The failure mode this guards against is an option that is parsed, echoed
+//! back to the user, and then never read by the code it is supposed to control.
+//! The countermeasure is structural: there is exactly one merge function,
 //! [`Config::resolve`], every field flows through it, and `tests/config_layering.rs`
 //! asserts per field that a flag beats the file and the file beats the default.
 

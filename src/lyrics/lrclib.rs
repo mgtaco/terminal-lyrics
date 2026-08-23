@@ -1,6 +1,6 @@
 //! LRCLIB client.
 //!
-//! v1 took `results[0]` from a search and hoped. That is measurably wrong: a
+//! Taking `results[0]` from a search is measurably wrong: a
 //! search for "Kanye West – Flashing Lights" returns twenty rows whose
 //! durations run 198s to 323s, and the first row is an 85-second-longer edit
 //! than the album track. Here the track length the player already told us is
@@ -21,7 +21,7 @@ const API: &str = "https://lrclib.net/api";
 const USER_AGENT: &str = concat!(
     "terminal-lyrics/",
     env!("CARGO_PKG_VERSION"),
-    " (https://github.com/tacoproz1/terminal-lyrics)"
+    " (https://github.com/mgtaco/terminal-lyrics)"
 );
 /// Beyond this the "match" is a different edit of the song and the timings are
 /// wrong throughout — worse than showing nothing.

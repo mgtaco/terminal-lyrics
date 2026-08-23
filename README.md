@@ -144,6 +144,18 @@ driven at arbitrary "times" without sleeping.
 * Anything in neither source will not be found, and `r` will not conjure it.
 * MPRIS only. A player that does not expose an MPRIS interface is invisible.
 
+## Credit
+
+The idea and the big block-letter look come from
+[tacos-terminal-lyrics](https://github.com/tacoproz1/tacos-terminal-lyrics) by
+tacoproz1. This is a separate program written from scratch in Rust, not a fork
+of it, and it takes a different approach: no music library to scan and no
+pre-processing pass.
+
+Lyrics come from [LRCLIB](https://lrclib.net) and the
+[AMLL TTML database](https://github.com/amll-dev/amll-ttml-db) (CC0). Neither is
+affiliated with this project.
+
 ## License
 
 MIT

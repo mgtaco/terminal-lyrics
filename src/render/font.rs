@@ -1,8 +1,9 @@
 //! Block fonts.
 //!
-//! The look is carried over from v1 — five-row solid block capitals — because
-//! that part was the good bit. What is new is that every glyph knows its width,
-//! so the layout can wrap instead of truncating.
+//! The five-row solid block capitals are modelled on the look of
+//! [tacos-terminal-lyrics](https://github.com/tacoproz1/tacos-terminal-lyrics),
+//! which is where the idea for this program came from. Every glyph here knows
+//! its width, so the layout can wrap instead of truncating.
 
 use std::collections::HashMap;
 

@@ -1,9 +1,9 @@
 //! Playback position without polling.
 //!
-//! v1 spawned three `playerctl` processes five times a second and inferred
-//! seeks from position drift. Here the player tells us where it is whenever it
-//! changes, we record that as an anchor, and everything between anchors is
-//! interpolated from a monotonic `Instant`. A slow background poll exists only
+//! Polling a player process several times a second and inferring seeks from
+//! position drift is the obvious approach and a bad one. Here the player tells
+//! us where it is whenever it changes, we record that as an anchor, and
+//! everything between anchors is interpolated from a monotonic `Instant`. A slow background poll exists only
 //! to catch players (Spotify among them) that do not emit `Seeked` reliably.
 //!
 //! Every method takes `now` explicitly so the whole thing is testable without

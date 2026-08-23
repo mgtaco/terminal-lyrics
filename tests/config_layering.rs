@@ -1,9 +1,9 @@
 //! Defaults < config file < flags, asserted field by field.
 //!
-//! This file exists because of a specific v1 bug: `--no-split-commas` was
-//! parsed, echoed back to the user as `Split commas: False`, and then ignored by
-//! the code that did the splitting. Any option that stops being wired up should
-//! fail here rather than in someone's terminal.
+//! This file exists to catch one specific kind of bug: a flag that is parsed,
+//! echoed back to the user, and then ignored by the code it is supposed to
+//! control. Any option that stops being wired up should fail here rather than
+//! in someone's terminal.
 
 use std::path::PathBuf;
 
@@ -81,8 +81,8 @@ fn flag_beats_file_for_font() {
 #[test]
 fn flag_beats_file_for_offset_including_negatives_and_zero() {
     assert_eq!(resolve(FULL_FILE, &["--offset-ms", "-250"]).offset_ms, -250);
-    // Zero is a real value, not "unset" — the `or`-on-falsy pattern that v1's
-    // Python used would have thrown this away and fallen back to 111.
+    // Zero is a real value, not "unset". An `or`-on-falsy merge would throw
+    // this away and fall back to 111.
     assert_eq!(resolve(FULL_FILE, &["--offset-ms", "0"]).offset_ms, 0);
 }
 
