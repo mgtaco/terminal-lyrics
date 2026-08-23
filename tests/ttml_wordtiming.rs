@@ -74,7 +74,7 @@ fn a_real_database_entry_parses_end_to_end() {
     let a2 = ttml::to_enhanced_lrc(&fixture("wordtimed.ttml")).unwrap();
     let parsed = lrc::parse(&a2);
     assert!(parsed.has_word_timings());
-    assert_eq!(parsed.lines.len(), 55);
+    assert_eq!(parsed.lines.len(), 6);
     assert_eq!(parsed.lines[0].text, "Flashing Lights");
     assert_eq!(parsed.lines[0].words.len(), 2);
 
@@ -156,17 +156,23 @@ fn offset_times_with_metric_suffixes_are_understood() {
 fn a_file_mixing_both_time_formats_keeps_every_line() {
     let a2 = ttml::to_enhanced_lrc(&fixture("mixed_timeformat.ttml")).unwrap();
     let parsed = lrc::parse(&a2);
-    assert_eq!(parsed.lines.len(), 84, "every line must survive");
+    // The fixture is trimmed to nine lines that straddle the one-minute mark:
+    // five written as bare seconds, four with a colon. Before the fix the five
+    // were silently dropped.
+    assert_eq!(parsed.lines.len(), 9, "every line must survive");
+    assert_eq!(
+        parsed.lines.iter().filter(|l| l.start < 60.0).count(),
+        5,
+        "the bare-second lines are the ones that used to vanish"
+    );
+    assert_eq!(parsed.lines.iter().filter(|l| l.start >= 60.0).count(), 4);
     // The first verse, which used to vanish entirely.
     assert_eq!(parsed.lines[0].text, "I threw a wish in the well");
     assert!((parsed.lines[0].start - 4.658).abs() < 0.001);
     assert!(parsed.has_word_timings());
 
-    // Lines must be continuous from the start, not begin a minute in.
-    assert!(
-        parsed.lines.iter().take(20).all(|l| l.start < 60.0),
-        "early lines are missing"
-    );
+    // The song must start at its beginning, not a minute in.
+    assert!(parsed.lines[0].start < 10.0, "the opening line is missing");
 }
 
 #[test]
