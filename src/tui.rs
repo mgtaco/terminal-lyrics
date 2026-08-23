@@ -35,7 +35,6 @@ enum LyricState {
     Ready {
         timeline: Box<Timeline>,
         source: Source,
-        synced: bool,
         /// Whether the source carries real per-word timestamps. Decided once,
         /// when the lyrics load, rather than per frame.
         word_timed: bool,
@@ -50,7 +49,6 @@ fn ready_from(found: crate::lyrics::Found) -> LyricState {
     LyricState::Ready {
         timeline: Box::new(Timeline::new(found.lyrics)),
         source: found.source,
-        synced: found.synced,
         word_timed,
     }
 }
@@ -298,41 +296,21 @@ fn draw(terminal: &mut DefaultTerminal, app: &App) -> Result<()> {
     Ok(())
 }
 
+/// The one-line strip along the bottom.
+///
+/// Just where the lyrics came from — `amll`, `lrclib`, `cache`, or a filename.
+/// Everything else that could go here (sync mode, offset, paused) is either
+/// visible on screen already or available from `lyrics status`; on the strip it
+/// was noise sitting under the lyrics.
+///
+/// The exception is the transient notice after a keypress, which is the only
+/// feedback `,` `.` `f` `w` `s` have.
 fn status_line(app: &App) -> Option<String> {
     if let Some(notice) = app.notice_text() {
         return Some(format!(" {notice}"));
     }
     match &app.state {
-        LyricState::Ready {
-            source,
-            synced,
-            word_timed,
-            ..
-        } => {
-            let mut parts = vec![source.short()];
-            if !*synced {
-                parts.push("unsynced".into());
-            }
-            // Says why the display looks the way it does.
-            if *word_timed {
-                parts.push(if app.cfg.word_by_word {
-                    "word-by-word".into()
-                } else {
-                    "word-timed".to_string()
-                });
-            }
-            if app.cfg.sweep == crate::config::Sweep::Always && !*word_timed {
-                parts.push("highlight interpolated".into());
-            }
-            let off = app.engine.clock().offset_ms();
-            if off != 0 {
-                parts.push(format!("offset {off:+}ms"));
-            }
-            if !app.engine.is_playing() {
-                parts.push("paused".into());
-            }
-            Some(format!(" {}", parts.join(" · ")))
-        }
+        LyricState::Ready { source, .. } => Some(format!(" {}", source.short())),
         _ => None,
     }
 }

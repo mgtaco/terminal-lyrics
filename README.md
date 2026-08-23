@@ -61,9 +61,11 @@ lyrics fetch --artist "Kanye West" --title "Flashing Lights" \
 lyrics paths                  # where the config and cache live
 ```
 
-`status` is the first thing to run when something is not working: it prints the
-resolved player, the track it sees, the length the player reported, the cache
-key, and where the lyrics came from.
+`status` is the first thing to run when something is not working: it prints
+every player and what it is doing, the track it sees, the length the player
+reported, the cache key, whether the lyrics carry real word timings, and where
+they came from. The strip along the bottom of the visualiser deliberately shows
+only that last part — the source — so it stays out of the way of the lyrics.
 
 ## Configuration
 
@@ -111,9 +113,9 @@ a file carrying tags on only some lines still shows the rest in full.
 **Highlight.** Separate, and off by default. `--sweep` highlights the sung part
 of whatever is on screen: across the current word in word-by-word mode, across
 the phrase otherwise. For line-level lyrics that highlight is interpolated from
-character counts between two real timestamps — an estimate, and labelled as one
-in the status strip. It is only ever a display effect; nothing invented is
-written to disk.
+character counts between two real timestamps — an estimate, and `lyrics status`
+labels it as one. It is only ever a display effect; nothing invented is written
+to disk.
 
 **Drawing.** ratatui diffs the screen buffer, so an unchanged frame emits no
 bytes. Lines wrap at word boundaries and the font steps down before anything is
