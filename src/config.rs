@@ -12,6 +12,48 @@ use serde::Deserialize;
 
 use crate::cli::Cli;
 
+/// When to highlight individual words as they are sung.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Sweep {
+    /// Highlight only when the source carries real per-word timestamps.
+    /// Anything else would be highlighting a guess.
+    Auto,
+    /// Always highlight, interpolating across the phrase when the source is
+    /// line-level.
+    Always,
+    /// Never highlight; show each line in one colour.
+    Never,
+}
+
+impl Sweep {
+    /// Whether to highlight, given what the loaded lyrics actually carry.
+    pub fn applies(self, has_word_timings: bool) -> bool {
+        match self {
+            Sweep::Auto => has_word_timings,
+            Sweep::Always => true,
+            Sweep::Never => false,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Sweep::Auto => "auto",
+            Sweep::Always => "always",
+            Sweep::Never => "never",
+        }
+    }
+
+    /// Order used by the `s` key.
+    pub fn next(self) -> Sweep {
+        match self {
+            Sweep::Auto => Sweep::Always,
+            Sweep::Always => Sweep::Never,
+            Sweep::Never => Sweep::Auto,
+        }
+    }
+}
+
 /// The settings the rest of the program reads. No `Option`s here: by this point
 /// every value has been decided.
 #[derive(Debug, Clone, PartialEq)]
@@ -21,7 +63,7 @@ pub struct Config {
     pub offset_ms: i64,
     pub lrc_dir: Option<PathBuf>,
     pub network: bool,
-    pub sweep: bool,
+    pub sweep: Sweep,
     /// Redraw interval. Only the sweep highlight moves between player events.
     pub tick_ms: u64,
     /// How far the predicted position may drift from the player's own
@@ -37,7 +79,7 @@ impl Default for Config {
             offset_ms: 0,
             lrc_dir: None,
             network: true,
-            sweep: true,
+            sweep: Sweep::Auto,
             tick_ms: 30,
             resync_threshold_ms: 250,
         }
@@ -53,7 +95,7 @@ pub struct ConfigFile {
     pub offset_ms: Option<i64>,
     pub lrc_dir: Option<PathBuf>,
     pub network: Option<bool>,
-    pub sweep: Option<bool>,
+    pub sweep: Option<Sweep>,
     pub tick_ms: Option<u64>,
     pub resync_threshold_ms: Option<u64>,
 }

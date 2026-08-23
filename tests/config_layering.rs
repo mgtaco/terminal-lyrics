@@ -9,7 +9,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use terminal_lyrics::cli::Cli;
-use terminal_lyrics::config::{Config, ConfigFile};
+use terminal_lyrics::config::{Config, ConfigFile, Sweep};
 
 fn from_args(args: &[&str]) -> Cli {
     let mut full = vec!["lyrics"];
@@ -28,7 +28,7 @@ font = "file-font"
 offset_ms = 111
 lrc_dir = "/file/lrc"
 network = false
-sweep = false
+sweep = "always"
 tick_ms = 77
 resync_threshold_ms = 333
 "#;
@@ -40,7 +40,7 @@ fn defaults_apply_with_no_file_and_no_flags() {
     assert_eq!(cfg.font, "block");
     assert_eq!(cfg.offset_ms, 0);
     assert!(cfg.network);
-    assert!(cfg.sweep);
+    assert_eq!(cfg.sweep, Sweep::Auto);
 }
 
 #[test]
@@ -52,12 +52,14 @@ fn file_overrides_every_default() {
     assert_eq!(cfg.offset_ms, 111);
     assert_eq!(cfg.lrc_dir, Some(PathBuf::from("/file/lrc")));
     assert!(!cfg.network);
-    assert!(!cfg.sweep);
+    assert_eq!(cfg.sweep, Sweep::Always);
     assert_eq!(cfg.tick_ms, 77);
     assert_eq!(cfg.resync_threshold_ms, 333);
     // Nothing above silently matched the default and passed by luck.
     assert_ne!(cfg.font, d.font);
     assert_ne!(cfg.tick_ms, d.tick_ms);
+    assert_ne!(cfg.sweep, d.sweep);
+    assert_ne!(cfg.network, d.network);
 }
 
 #[test]
@@ -94,17 +96,40 @@ fn no_network_flag_wins_and_its_absence_defers_to_the_file() {
 }
 
 #[test]
-fn sweep_is_a_real_tristate() {
-    // Flag on top of a file that says off.
-    assert!(resolve("sweep = false", &["--sweep"]).sweep);
-    // Flag on top of a file that says on.
-    assert!(!resolve("sweep = true", &["--no-sweep"]).sweep);
-    // Neither flag: the file decides.
-    assert!(!resolve("sweep = false", &[]).sweep);
-    assert!(resolve("sweep = true", &[]).sweep);
+fn sweep_flags_override_the_file() {
+    // Flag on top of a file that says never.
+    assert_eq!(resolve(r#"sweep = "never""#, &["--sweep"]).sweep, Sweep::Always);
+    // Flag on top of a file that says always.
+    assert_eq!(
+        resolve(r#"sweep = "always""#, &["--no-sweep"]).sweep,
+        Sweep::Never
+    );
+    // Neither flag: the file decides, including choosing auto explicitly.
+    assert_eq!(resolve(r#"sweep = "never""#, &[]).sweep, Sweep::Never);
+    assert_eq!(resolve(r#"sweep = "auto""#, &[]).sweep, Sweep::Auto);
     // Last flag wins if both are somehow passed.
-    assert!(!resolve("", &["--sweep", "--no-sweep"]).sweep);
-    assert!(resolve("", &["--no-sweep", "--sweep"]).sweep);
+    assert_eq!(resolve("", &["--sweep", "--no-sweep"]).sweep, Sweep::Never);
+    assert_eq!(resolve("", &["--no-sweep", "--sweep"]).sweep, Sweep::Always);
+}
+
+#[test]
+fn auto_highlights_only_lyrics_with_real_word_timings() {
+    // The whole point of the default: a line-level LRC gets no moving
+    // highlight, because there is nothing real to move it with.
+    assert!(Sweep::Auto.applies(true));
+    assert!(!Sweep::Auto.applies(false));
+    // The overrides ignore what the source carries.
+    assert!(Sweep::Always.applies(false));
+    assert!(Sweep::Always.applies(true));
+    assert!(!Sweep::Never.applies(true));
+    assert!(!Sweep::Never.applies(false));
+}
+
+#[test]
+fn an_unknown_sweep_mode_is_rejected() {
+    assert!(ConfigFile::parse(r#"sweep = "sometimes""#).is_err());
+    // The old boolean form is a clear error, not a silent fallback.
+    assert!(ConfigFile::parse("sweep = true").is_err());
 }
 
 #[test]

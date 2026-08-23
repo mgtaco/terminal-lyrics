@@ -18,8 +18,11 @@ offset_ms = 0
 # Set false to use only the cache and lrc_dir.
 network = true
 
-# Highlight words as they are sung.
-sweep = true
+# When to highlight individual words as they are sung.
+#   "auto"   — only when the lyrics carry real per-word timestamps (default)
+#   "always" — also for line-level lyrics, where the highlight is an estimate
+#   "never"  — show each line in one colour
+sweep = "auto"
 
 # Redraw interval in milliseconds (10–1000). Only the sweep moves between
 # player events, and unchanged cells are not redrawn at all.

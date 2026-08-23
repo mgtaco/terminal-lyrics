@@ -40,12 +40,14 @@ letters, with a highlight sweeping across each line as it is sung.
 | `,` / `.` | shift lyrics 100 ms earlier / later |
 | `0` | reset the shift |
 | `f` | cycle font (block → compact → mini) |
-| `s` | toggle the highlight sweep |
+| `s` | cycle the word highlight: auto → always → never |
 | `r` | forget the cached lyrics and look them up again |
 
-Useful flags: `--player spotify` to pin a player when several are running,
-`--font compact`, `--offset-ms -250`, `--lrc-dir ~/lyrics` to prefer your own
-`Artist - Title.lrc` files, `--no-network` to use only those and the cache.
+Useful flags: `--sweep` to force the word highlight on even for line-level
+lyrics, `--no-sweep` to force it off, `--player spotify` to pin a player when
+several are running, `--font compact`, `--offset-ms -250` when a particular LRC file is
+timed badly, `--lrc-dir ~/lyrics` to prefer your own `Artist - Title.lrc` files,
+`--no-network` to use only those and the cache.
 
 ## Without the TUI
 
@@ -79,10 +81,14 @@ Candidates more than five seconds from the track's real length are rejected
 rather than shown out of sync. Misses are cached for a day so a track LRCLIB has
 never heard of is not re-queried on every play.
 
-**Word timing.** If a source carries real per-word timestamps, they are used. If
-it does not, the highlight sweeps across the phrase between its two real
-timestamps, weighted by character count. That is an estimate, it is only ever a
-display effect, and nothing invented is written to disk.
+**Word timing.** The word highlight follows the lyrics, not a preference. By
+default (`sweep = "auto"`) it appears only for sources that carry real per-word
+timestamps, and stays off for line-level ones — where moving it would mean
+animating a guess. `--sweep` forces it on anyway, interpolating across the
+phrase between its two real timestamps weighted by character count; `--no-sweep`
+forces it off. `lyrics status` says which you have and whether the highlight
+will show. Either way it is only a display effect, and nothing invented is
+written to disk.
 
 **Drawing.** ratatui diffs the screen buffer, so an unchanged frame emits no
 bytes. Lines wrap at word boundaries and the font steps down before anything is

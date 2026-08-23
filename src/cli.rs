@@ -8,6 +8,8 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
+use crate::config::Sweep;
+
 #[derive(Parser, Debug, Default)]
 #[command(
     name = "lyrics",
@@ -39,11 +41,13 @@ pub struct Cli {
     #[arg(long)]
     pub no_network: bool,
 
-    /// Highlight words as they are sung (interpolated when the source is line-level).
+    /// Always highlight words as they are sung, even when the timings are
+    /// interpolated. By default the highlight appears only for lyrics that
+    /// carry real per-word timestamps.
     #[arg(long, overrides_with = "no_sweep")]
     pub sweep: bool,
 
-    /// Show whole lines without a moving highlight.
+    /// Never highlight words; show each line in one colour.
     #[arg(long, overrides_with = "sweep")]
     pub no_sweep: bool,
 
@@ -72,11 +76,12 @@ pub enum Command {
 }
 
 impl Cli {
-    /// `--sweep` / `--no-sweep` collapsed into one tri-state.
-    pub fn sweep_choice(&self) -> Option<bool> {
+    /// `--sweep` / `--no-sweep` as an override, or `None` to defer to the
+    /// config file and then the default.
+    pub fn sweep_choice(&self) -> Option<Sweep> {
         match (self.sweep, self.no_sweep) {
-            (true, false) => Some(true),
-            (false, true) => Some(false),
+            (true, false) => Some(Sweep::Always),
+            (false, true) => Some(Sweep::Never),
             _ => None,
         }
     }

@@ -108,6 +108,17 @@ async fn cmd_status(cfg: &Config) -> Result<()> {
 
     let name = mpris::resolve_player(&conn, cfg.player.as_deref()).await?;
     println!("following {name}");
+    println!(
+        "offset    {}ms{}",
+        cfg.offset_ms,
+        if cfg.offset_ms == 0 {
+            ""
+        } else if cfg.offset_ms < 0 {
+            "  (lyrics shown earlier)"
+        } else {
+            "  (lyrics shown later)"
+        }
+    );
 
     let handle = MprisPlayerHandle::connect(&conn, &name).await?;
     let playing = handle.playing().await;
@@ -143,7 +154,7 @@ async fn cmd_status(cfg: &Config) -> Result<()> {
     if let Some(dir) = cfg.lrc_dir.as_deref()
         && let Some(found) = terminal_lyrics::lyrics::local_lookup(dir, &track)
     {
-        println!("lyrics    {} ({} lines)", found.source, found.lyrics.lines.len());
+        report_lyrics(cfg, &found);
         return Ok(());
     }
 
@@ -154,17 +165,7 @@ async fn cmd_status(cfg: &Config) -> Result<()> {
 
     match lrclib::lookup(&client, &cache, &track).await? {
         Outcome::Found(found) => {
-            println!(
-                "lyrics    {} · {} · {} lines · {}",
-                found.source,
-                if found.synced { "synced" } else { "unsynced" },
-                found.lyrics.lines.len(),
-                if found.lyrics.has_word_timings() {
-                    "real word timings"
-                } else {
-                    "interpolated sweep"
-                }
-            );
+            report_lyrics(cfg, &found);
             if matches!(found.source, Source::LrcLib { .. }) {
                 println!("          (now cached)");
             }
@@ -172,6 +173,32 @@ async fn cmd_status(cfg: &Config) -> Result<()> {
         Outcome::Missing => println!("lyrics    (none found)"),
     }
     Ok(())
+}
+
+/// One place that describes a set of lyrics, so every path through `status`
+/// reports the same fields.
+fn report_lyrics(cfg: &Config, found: &terminal_lyrics::lyrics::Found) {
+    let word_timed = found.lyrics.has_word_timings();
+    println!(
+        "lyrics    {} · {} · {} lines · {}",
+        found.source,
+        if found.synced { "synced" } else { "unsynced" },
+        found.lyrics.lines.len(),
+        if word_timed {
+            "real word timings"
+        } else {
+            "line-level only"
+        }
+    );
+    println!(
+        "highlight {} -> {}",
+        cfg.sweep.label(),
+        if cfg.sweep.applies(word_timed) {
+            "on"
+        } else {
+            "off"
+        }
+    );
 }
 
 async fn cmd_run(cfg: Config) -> Result<()> {

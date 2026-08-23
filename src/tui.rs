@@ -36,9 +36,23 @@ enum LyricState {
         timeline: Box<Timeline>,
         source: Source,
         synced: bool,
+        /// Whether the source carries real per-word timestamps. Decided once,
+        /// when the lyrics load, rather than per frame.
+        word_timed: bool,
     },
     /// Looked up, nothing usable found.
     Missing,
+}
+
+/// Build the loaded state, noting up front whether the timings are real.
+fn ready_from(found: crate::lyrics::Found) -> LyricState {
+    let word_timed = found.lyrics.has_word_timings();
+    LyricState::Ready {
+        timeline: Box::new(Timeline::new(found.lyrics)),
+        source: found.source,
+        synced: found.synced,
+        word_timed,
+    }
 }
 
 /// A finished background lookup, tagged with the track it was for so a slow
@@ -208,11 +222,13 @@ fn draw(terminal: &mut DefaultTerminal, app: &App) -> Result<()> {
             },
             LyricState::Searching => Screen::Searching { label: &label },
             LyricState::Missing => Screen::NoLyrics { label: &label },
-            LyricState::Ready { timeline, .. } => match timeline.locate(pos) {
+            LyricState::Ready {
+                timeline, word_timed, ..
+            } => match timeline.locate(pos) {
                 Position::Line { index } => {
                     if let Some(line) = timeline.line(index) {
                         line_text = line.text.clone();
-                        highlight = if app.cfg.sweep {
+                        highlight = if app.cfg.sweep.applies(*word_timed) {
                             timeline.highlight_chars(index, pos)
                         } else {
                             0
@@ -261,10 +277,22 @@ fn status_line(app: &App) -> Option<String> {
         return Some(format!(" {notice}"));
     }
     match &app.state {
-        LyricState::Ready { source, synced, .. } => {
+        LyricState::Ready {
+            source,
+            synced,
+            word_timed,
+            ..
+        } => {
             let mut parts = vec![source.to_string()];
             if !*synced {
                 parts.push("unsynced".into());
+            }
+            // Says why the highlight is or is not moving.
+            if *word_timed {
+                parts.push("word-timed".into());
+            }
+            if app.cfg.sweep == crate::config::Sweep::Always && !*word_timed {
+                parts.push("highlight interpolated".into());
             }
             let off = app.engine.clock().offset_ms();
             if off != 0 {
@@ -296,11 +324,7 @@ fn start_lookup(
     if let Some(dir) = app.cfg.lrc_dir.clone()
         && let Some(found) = crate::lyrics::local_lookup(&dir, &track)
     {
-        app.state = LyricState::Ready {
-            timeline: Box::new(Timeline::new(found.lyrics)),
-            source: found.source,
-            synced: found.synced,
-        };
+        app.state = ready_from(found);
         return;
     }
 
@@ -311,11 +335,7 @@ fn start_lookup(
     if let Some(cached) = cache.get(&track.id) {
         match cached {
             Some(found) => {
-                app.state = LyricState::Ready {
-                    timeline: Box::new(Timeline::new(found.lyrics)),
-                    source: found.source,
-                    synced: found.synced,
-                };
+                app.state = ready_from(found);
             }
             None => app.state = LyricState::Missing,
         }
@@ -346,11 +366,7 @@ fn apply_fetch(app: &mut App, result: FetchResult) {
     }
     match result.outcome {
         Ok(Outcome::Found(found)) => {
-            app.state = LyricState::Ready {
-                timeline: Box::new(Timeline::new(found.lyrics)),
-                source: found.source,
-                synced: found.synced,
-            };
+            app.state = ready_from(*found);
         }
         Ok(Outcome::Missing) => app.state = LyricState::Missing,
         Err(e) => {
@@ -397,12 +413,16 @@ async fn handle_key(
             app.note(format!("font: {next}"));
         }
         KeyCode::Char('s') => {
-            app.cfg.sweep = !app.cfg.sweep;
-            app.note(if app.cfg.sweep {
-                "sweep on"
-            } else {
-                "sweep off"
-            });
+            app.cfg.sweep = app.cfg.sweep.next();
+            let active = matches!(
+                app.state,
+                LyricState::Ready { word_timed, .. } if app.cfg.sweep.applies(word_timed)
+            );
+            app.note(format!(
+                "highlight: {} ({})",
+                app.cfg.sweep.label(),
+                if active { "on" } else { "off" }
+            ));
         }
         KeyCode::Char('r') => {
             if let Some(track) = app.engine.track().cloned() {
