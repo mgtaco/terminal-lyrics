@@ -51,6 +51,15 @@ pub struct Cli {
     #[arg(long, overrides_with = "sweep")]
     pub no_sweep: bool,
 
+    /// Show one word at a time when the lyrics carry real word timings.
+    /// This is the default; `--whole-lines` turns it off.
+    #[arg(long, overrides_with = "whole_lines")]
+    pub word_by_word: bool,
+
+    /// Always show the full lyric line, even when word timings are available.
+    #[arg(long, overrides_with = "word_by_word")]
+    pub whole_lines: bool,
+
     #[command(subcommand)]
     pub command: Option<Command>,
 }
@@ -80,6 +89,16 @@ pub enum Command {
 }
 
 impl Cli {
+    /// `--word-by-word` / `--whole-lines` as an override, or `None` to defer
+    /// to the config file and then the default.
+    pub fn word_by_word_choice(&self) -> Option<bool> {
+        match (self.word_by_word, self.whole_lines) {
+            (true, false) => Some(true),
+            (false, true) => Some(false),
+            _ => None,
+        }
+    }
+
     /// `--sweep` / `--no-sweep` as an override, or `None` to defer to the
     /// config file and then the default.
     pub fn sweep_choice(&self) -> Option<Sweep> {

@@ -5,6 +5,8 @@
 //! no word tags — that interpolation is display-only and is never written back
 //! out, which is the honest version of what v1 baked into `.wlrc` files.
 
+use std::ops::Range;
+
 use crate::lrc::Lyrics;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -60,6 +62,22 @@ impl Timeline {
             return Position::Outro;
         }
         Position::Line { index: idx }
+    }
+
+    /// The word being sung within line `index`, as a char range into
+    /// [`crate::lrc::Line::text`].
+    ///
+    /// `None` before the first word starts. Inside a gap between words the
+    /// previous word is kept rather than blanking the screen — the gaps are
+    /// real (word-timed sources record them) and flashing through them would be
+    /// worse than holding.
+    pub fn active_word(&self, index: usize, pos: f64) -> Option<Range<usize>> {
+        let line = self.lyrics.lines.get(index)?;
+        let started = line.words.partition_point(|w| w.start <= pos);
+        if started == 0 {
+            return None;
+        }
+        Some(line.words[started - 1].range.clone())
     }
 
     /// How far the highlight has travelled across line `index`, in characters.

@@ -36,6 +36,20 @@ impl std::fmt::Display for Source {
     }
 }
 
+impl Source {
+    /// Short form for the one-line status strip, where a full path would crowd
+    /// out everything else.
+    pub fn short(&self) -> String {
+        match self {
+            Source::LocalFile(p) => p
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| "file".to_string()),
+            other => other.to_string(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Found {
     pub lyrics: Lyrics,

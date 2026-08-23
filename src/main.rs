@@ -215,6 +215,14 @@ fn report_lyrics(cfg: &Config, found: &terminal_lyrics::lyrics::Found) {
         }
     );
     println!(
+        "display   {}",
+        if word_timed && cfg.word_by_word {
+            "one word at a time"
+        } else {
+            "whole lines"
+        }
+    );
+    println!(
         "highlight {} -> {}",
         cfg.sweep.label(),
         if cfg.sweep.applies(word_timed) {

@@ -227,11 +227,37 @@ fn draw(terminal: &mut DefaultTerminal, app: &App) -> Result<()> {
             } => match timeline.locate(pos) {
                 Position::Line { index } => {
                     if let Some(line) = timeline.line(index) {
-                        line_text = line.text.clone();
                         highlight = if app.cfg.sweep.applies(*word_timed) {
                             timeline.highlight_chars(index, pos)
                         } else {
                             0
+                        };
+
+                        // With real word timings, show the word being sung on
+                        // its own. Decided per line, not per file: a source can
+                        // carry tags on some lines and not others, and those
+                        // lines must still appear in full rather than vanish.
+                        let split = app.cfg.word_by_word && !line.words.is_empty();
+
+                        line_text = match split {
+                            true => match timeline.active_word(index, pos) {
+                                Some(range) => {
+                                    // The highlight is an offset into the whole
+                                    // line; rebase it onto the word on screen.
+                                    highlight = highlight.saturating_sub(range.start);
+                                    line
+                                        .text
+                                        .chars()
+                                        .skip(range.start)
+                                        .take(range.end - range.start)
+                                        .collect()
+                                }
+                                // The line has started but its first word has
+                                // not; hold the screen rather than flashing the
+                                // whole line for a frame.
+                                None => String::new(),
+                            },
+                            false => line.text.clone(),
                         };
                     }
                     Screen::Lyric {
@@ -283,13 +309,17 @@ fn status_line(app: &App) -> Option<String> {
             word_timed,
             ..
         } => {
-            let mut parts = vec![source.to_string()];
+            let mut parts = vec![source.short()];
             if !*synced {
                 parts.push("unsynced".into());
             }
-            // Says why the highlight is or is not moving.
+            // Says why the display looks the way it does.
             if *word_timed {
-                parts.push("word-timed".into());
+                parts.push(if app.cfg.word_by_word {
+                    "word-by-word".into()
+                } else {
+                    "word-timed".to_string()
+                });
             }
             if app.cfg.sweep == crate::config::Sweep::Always && !*word_timed {
                 parts.push("highlight interpolated".into());
@@ -423,6 +453,14 @@ async fn handle_key(
                 app.cfg.sweep.label(),
                 if active { "on" } else { "off" }
             ));
+        }
+        KeyCode::Char('w') => {
+            app.cfg.word_by_word = !app.cfg.word_by_word;
+            app.note(if app.cfg.word_by_word {
+                "one word at a time"
+            } else {
+                "whole lines"
+            });
         }
         KeyCode::Char('r') => {
             if let Some(track) = app.engine.track().cloned() {

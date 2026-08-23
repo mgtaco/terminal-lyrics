@@ -64,6 +64,9 @@ pub struct Config {
     pub lrc_dir: Option<PathBuf>,
     pub network: bool,
     pub sweep: Sweep,
+    /// Show one word at a time when the lyrics carry real word timings.
+    /// Ignored for line-level sources, which have nothing to split on.
+    pub word_by_word: bool,
     /// Redraw interval. Only the sweep highlight moves between player events.
     pub tick_ms: u64,
     /// How far the predicted position may drift from the player's own
@@ -79,7 +82,8 @@ impl Default for Config {
             offset_ms: 0,
             lrc_dir: None,
             network: true,
-            sweep: Sweep::Auto,
+            sweep: Sweep::Never,
+            word_by_word: true,
             tick_ms: 30,
             resync_threshold_ms: 250,
         }
@@ -96,6 +100,7 @@ pub struct ConfigFile {
     pub lrc_dir: Option<PathBuf>,
     pub network: Option<bool>,
     pub sweep: Option<Sweep>,
+    pub word_by_word: Option<bool>,
     pub tick_ms: Option<u64>,
     pub resync_threshold_ms: Option<u64>,
 }
@@ -135,6 +140,10 @@ impl Config {
                 .sweep_choice()
                 .or(file.sweep)
                 .unwrap_or(d.sweep),
+            word_by_word: cli
+                .word_by_word_choice()
+                .or(file.word_by_word)
+                .unwrap_or(d.word_by_word),
             tick_ms: file.tick_ms.unwrap_or(d.tick_ms).clamp(10, 1000),
             resync_threshold_ms: file
                 .resync_threshold_ms

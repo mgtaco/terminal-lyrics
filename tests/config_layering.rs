@@ -29,6 +29,7 @@ offset_ms = 111
 lrc_dir = "/file/lrc"
 network = false
 sweep = "always"
+word_by_word = false
 tick_ms = 77
 resync_threshold_ms = 333
 "#;
@@ -40,7 +41,8 @@ fn defaults_apply_with_no_file_and_no_flags() {
     assert_eq!(cfg.font, "block");
     assert_eq!(cfg.offset_ms, 0);
     assert!(cfg.network);
-    assert_eq!(cfg.sweep, Sweep::Auto);
+    assert_eq!(cfg.sweep, Sweep::Never, "the highlight is opt-in");
+    assert!(cfg.word_by_word, "word-timed lyrics show one word at a time");
 }
 
 #[test]
@@ -53,12 +55,14 @@ fn file_overrides_every_default() {
     assert_eq!(cfg.lrc_dir, Some(PathBuf::from("/file/lrc")));
     assert!(!cfg.network);
     assert_eq!(cfg.sweep, Sweep::Always);
+    assert!(!cfg.word_by_word);
     assert_eq!(cfg.tick_ms, 77);
     assert_eq!(cfg.resync_threshold_ms, 333);
     // Nothing above silently matched the default and passed by luck.
     assert_ne!(cfg.font, d.font);
     assert_ne!(cfg.tick_ms, d.tick_ms);
     assert_ne!(cfg.sweep, d.sweep);
+    assert_ne!(cfg.word_by_word, d.word_by_word);
     assert_ne!(cfg.network, d.network);
 }
 
@@ -130,6 +134,33 @@ fn an_unknown_sweep_mode_is_rejected() {
     assert!(ConfigFile::parse(r#"sweep = "sometimes""#).is_err());
     // The old boolean form is a clear error, not a silent fallback.
     assert!(ConfigFile::parse("sweep = true").is_err());
+}
+
+#[test]
+fn word_by_word_flags_override_the_file() {
+    assert!(resolve("word_by_word = false", &["--word-by-word"]).word_by_word);
+    assert!(!resolve("word_by_word = true", &["--whole-lines"]).word_by_word);
+    assert!(!resolve("word_by_word = false", &[]).word_by_word);
+    // Last flag wins.
+    assert!(!resolve("", &["--word-by-word", "--whole-lines"]).word_by_word);
+    assert!(resolve("", &["--whole-lines", "--word-by-word"]).word_by_word);
+}
+
+#[test]
+fn the_two_display_settings_are_independent() {
+    // One word at a time with no highlight is the default pairing; every other
+    // combination must be reachable.
+    let both = resolve("", &["--sweep", "--word-by-word"]);
+    assert_eq!(both.sweep, Sweep::Always);
+    assert!(both.word_by_word);
+
+    let neither = resolve("", &["--no-sweep", "--whole-lines"]);
+    assert_eq!(neither.sweep, Sweep::Never);
+    assert!(!neither.word_by_word);
+
+    let highlighted_lines = resolve("", &["--sweep", "--whole-lines"]);
+    assert_eq!(highlighted_lines.sweep, Sweep::Always);
+    assert!(!highlighted_lines.word_by_word);
 }
 
 #[test]

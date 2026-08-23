@@ -91,3 +91,64 @@ fn repeated_chorus_lines_are_located_independently() {
     assert_eq!(t.locate(71.0), Position::Line { index: 2 });
     assert_eq!(t.line(2).unwrap().text, "chorus");
 }
+
+const WORDED: &str = "[00:10.00]<00:10.00>one<00:10.50> <00:11.00>two<00:11.50> <00:12.00>three<00:12.90>\n[00:20.00]after\n";
+
+#[test]
+fn the_active_word_tracks_the_position() {
+    let t = tl(WORDED);
+    let word = |pos: f64| {
+        t.active_word(0, pos).map(|r| {
+            t.line(0)
+                .unwrap()
+                .text
+                .chars()
+                .skip(r.start)
+                .take(r.end - r.start)
+                .collect::<String>()
+        })
+    };
+    assert_eq!(word(9.9), None, "nothing before the line starts");
+    assert_eq!(word(10.0).as_deref(), Some("one"));
+    assert_eq!(word(10.4).as_deref(), Some("one"));
+    assert_eq!(word(11.0).as_deref(), Some("two"));
+    assert_eq!(word(12.5).as_deref(), Some("three"));
+}
+
+#[test]
+fn a_gap_between_words_holds_the_previous_one() {
+    // "one" ends at 10.5 but "two" starts at 11.0. Blanking the screen through
+    // that half second would read as a flicker, so the word is held.
+    let t = tl(WORDED);
+    let range = t.active_word(0, 10.75).expect("should hold a word");
+    let text: String = t
+        .line(0)
+        .unwrap()
+        .text
+        .chars()
+        .skip(range.start)
+        .take(range.end - range.start)
+        .collect();
+    assert_eq!(text, "one");
+}
+
+#[test]
+fn a_line_without_word_tags_has_no_active_word() {
+    // The per-line fallback the display relies on: such a line must be shown
+    // whole rather than disappearing.
+    let t = tl(WORDED);
+    assert!(t.line(1).unwrap().words.is_empty());
+    assert_eq!(t.active_word(1, 21.0), None);
+}
+
+#[test]
+fn the_highlight_offset_rebases_onto_the_active_word() {
+    let t = tl(WORDED);
+    // Midway through "two" (11.0..11.5): absolute offset sits inside 4..7.
+    let abs = t.highlight_chars(0, 11.25);
+    let range = t.active_word(0, 11.25).unwrap();
+    assert_eq!(range, 4..7, "\"two\" occupies chars 4..7 of \"one two three\"");
+    let relative = abs.saturating_sub(range.start);
+    assert!(relative <= 3, "highlight must stay inside the word, got {relative}");
+    assert!(relative >= 1, "and must have advanced into it, got {relative}");
+}

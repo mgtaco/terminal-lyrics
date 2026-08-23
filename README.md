@@ -30,8 +30,9 @@ lyrics
 ```
 
 It finds your MPRIS player, reads what is playing, downloads synced lyrics, and
-displays them a phrase at a time in block letters. Where the lyrics carry real
-per-word timings, a highlight follows the words as they are sung.
+displays them in block letters. Lyrics that carry real per-word timings are
+shown **one word at a time**, each word appearing as it is sung; line-level
+lyrics are shown a phrase at a time.
 
 | key | |
 |---|---|
@@ -40,12 +41,13 @@ per-word timings, a highlight follows the words as they are sung.
 | `,` / `.` | shift lyrics 100 ms earlier / later |
 | `0` | reset the shift |
 | `f` | cycle font (block → compact → mini) |
-| `s` | cycle the word highlight: auto → always → never |
+| `w` | switch between one word at a time and whole lines |
+| `s` | cycle the highlight: never → auto → always |
 | `r` | forget the cached lyrics and look them up again |
 
-Useful flags: `--sweep` to force the word highlight on even for line-level
-lyrics, `--no-sweep` to force it off, `--player spotify` to pin a player when
-several are running, `--font compact`, `--offset-ms -250` when a particular LRC file is
+Useful flags: `--whole-lines` to always show the full phrase, `--sweep` to
+highlight the sung part of what is on screen (off by default), `--player
+spotify` to pin a player when several are running, `--font compact`, `--offset-ms -250` when a particular LRC file is
 timed badly, `--lrc-dir ~/lyrics` to prefer your own `Artist - Title.lrc` files,
 `--no-network` to use only those and the cache.
 
@@ -93,13 +95,17 @@ Candidates more than five seconds from the track's real length are rejected
 rather than shown out of sync. Misses are cached for a day so a track LRCLIB has
 never heard of is not re-queried on every play.
 
-**Word timing.** The word highlight follows the lyrics, not a preference. By
-default (`sweep = "auto"`) it appears only for sources that carry real per-word
-timestamps — in practice, AMLL hits — and stays off for line-level ones — where moving it would mean
-animating a guess. `--sweep` forces it on anyway, interpolating across the
-phrase between its two real timestamps weighted by character count; `--no-sweep`
-forces it off. `lyrics status` says which you have and whether the highlight
-will show. Either way it is only a display effect, and nothing invented is
+**Word timing.** What is on screen follows the lyrics, not a preference. A
+source with real per-word timestamps — in practice an AMLL hit — is shown one
+word at a time, each word appearing on its own timestamp. A line-level source
+has nothing to split on, so it is shown whole. The decision is made per line, so
+a file carrying tags on only some lines still shows the rest in full.
+
+**Highlight.** Separate, and off by default. `--sweep` highlights the sung part
+of whatever is on screen: across the current word in word-by-word mode, across
+the phrase otherwise. For line-level lyrics that highlight is interpolated from
+character counts between two real timestamps — an estimate, and labelled as one
+in the status strip. It is only ever a display effect; nothing invented is
 written to disk.
 
 **Drawing.** ratatui diffs the screen buffer, so an unchanged frame emits no
@@ -109,7 +115,7 @@ clipped; nothing is ever truncated.
 ## Development
 
 ```bash
-cargo test                      # 73 tests, no terminal or player needed
+cargo test                      # 79 tests, no terminal or player needed
 cargo clippy --all-targets -- -D warnings
 cargo run --example pump_dump -- 15   # dump the live player event stream
 ```
