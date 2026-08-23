@@ -152,3 +152,45 @@ fn the_highlight_offset_rebases_onto_the_active_word() {
     assert!(relative <= 3, "highlight must stay inside the word, got {relative}");
     assert!(relative >= 1, "and must have advanced into it, got {relative}");
 }
+
+const SYLLABLES: &str =
+    "[00:10.00]<00:10.00>be<00:10.40>lieve<00:10.90> <00:11.00>it<00:11.40>\n[00:20.00]after\n";
+
+fn shown(t: &Timeline, pos: f64) -> Option<String> {
+    let r = t.active_word(0, pos)?;
+    Some(
+        t.line(0)
+            .unwrap()
+            .text
+            .chars()
+            .skip(r.start)
+            .take(r.end - r.start)
+            .collect(),
+    )
+}
+
+#[test]
+fn a_syllable_timed_word_builds_up_instead_of_being_replaced() {
+    // The bug this pins: showing each timed span on its own puts "lieve" alone
+    // on the screen, which is not a word.
+    let t = tl(SYLLABLES);
+    assert_eq!(shown(&t, 10.0).as_deref(), Some("be"));
+    assert_eq!(shown(&t, 10.5).as_deref(), Some("believe"));
+    // Held through the gap before the next word, still whole.
+    assert_eq!(shown(&t, 10.95).as_deref(), Some("believe"));
+    // A space ends the word: the next one starts from scratch.
+    assert_eq!(shown(&t, 11.2).as_deref(), Some("it"));
+}
+
+#[test]
+fn the_highlight_keeps_up_with_a_word_that_is_still_growing() {
+    let t = tl(SYLLABLES);
+    // Midway through "lieve" (10.40..10.90), which is chars 2..7 of the line.
+    let range = t.active_word(0, 10.65).unwrap();
+    assert_eq!(range, 0..7, "the whole word so far");
+    let relative = t.highlight_chars(0, 10.65).saturating_sub(range.start);
+    assert!(
+        (3..=7).contains(&relative),
+        "the highlight must be past \"be\" and inside the word, got {relative}"
+    );
+}

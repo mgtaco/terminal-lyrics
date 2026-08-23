@@ -238,6 +238,8 @@ fn draw(terminal: &mut DefaultTerminal, app: &App) -> Result<()> {
                         let split = app.cfg.word_by_word && !line.words.is_empty();
 
                         line_text = match split {
+                            // A syllable-timed word grows a syllable at a time
+                            // rather than being replaced by each new piece.
                             true => match timeline.active_word(index, pos) {
                                 Some(range) => {
                                     // The highlight is an offset into the whole

@@ -17,7 +17,9 @@
 
 use std::ops::Range;
 
-/// A word with its own timestamp, from an enhanced-LRC source.
+/// A timed span from an enhanced-LRC source: one word, or one syllable of a
+/// word when the source times long words in pieces. [`Line::continues_word`]
+/// tells the two apart.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Word {
     pub start: f64,
@@ -48,6 +50,43 @@ impl Line {
 
     pub fn char_len(&self) -> usize {
         self.text.chars().count()
+    }
+
+    /// Whether word `i` continues the word before it instead of starting a new
+    /// one — a syllable rather than a word.
+    ///
+    /// Word-timed sources time long words in pieces (`be` then `lieve`), and the
+    /// only thing that separates two real words is the whitespace between them.
+    /// A timed span butted straight up against the one before it is therefore
+    /// part of the same word, and must not be shown as a word of its own.
+    pub fn continues_word(&self, i: usize) -> bool {
+        let Some(prev) = i.checked_sub(1).and_then(|p| self.words.get(p)) else {
+            return false;
+        };
+        let Some(cur) = self.words.get(i) else {
+            return false;
+        };
+        let gap = cur.range.start.saturating_sub(prev.range.end);
+        self.text
+            .chars()
+            .skip(prev.range.end)
+            .take(gap)
+            .all(|c| !c.is_whitespace())
+    }
+
+    /// The char range of the whole word that word `i` belongs to, from the start
+    /// of its first syllable to the end of its last.
+    pub fn word_bounds(&self, i: usize) -> Option<Range<usize>> {
+        self.words.get(i)?;
+        let mut first = i;
+        while self.continues_word(first) {
+            first -= 1;
+        }
+        let mut last = i;
+        while self.continues_word(last + 1) {
+            last += 1;
+        }
+        Some(self.words[first].range.start..self.words[last].range.end)
     }
 }
 

@@ -186,3 +186,20 @@ fn an_unparsable_time_fails_loudly_instead_of_dropping_the_line() {
     let err = ttml::to_enhanced_lrc(xml).unwrap_err().to_string();
     assert!(err.contains("partial"), "unhelpful error: {err}");
 }
+
+#[test]
+fn syllable_spans_survive_the_conversion_as_one_word() {
+    // TTML splits a long word into consecutive spans with nothing between them.
+    // The A2 output must keep them touching, or the display cannot tell a
+    // syllable from a word.
+    let xml = r#"<tt xmlns="http://www.w3.org/ns/ttml"><body><div>
+      <p begin="00:01.000" end="00:03.000"><span begin="00:01.000" end="00:01.200">be</span><span begin="00:01.200" end="00:01.800">lieve</span> <span begin="00:02.000" end="00:03.000">me</span></p>
+    </div></body></tt>"#;
+    let parsed = lrc::parse(&ttml::to_enhanced_lrc(xml).unwrap());
+    let line = &parsed.lines[0];
+    assert_eq!(line.text, "believe me");
+    assert_eq!(line.words.len(), 3);
+    assert!(line.continues_word(1), "the second span is a syllable");
+    assert!(!line.continues_word(2), "the third is a separate word");
+    assert_eq!(line.word_bounds(1), Some(0..7));
+}

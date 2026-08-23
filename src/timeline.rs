@@ -64,8 +64,13 @@ impl Timeline {
         Position::Line { index: idx }
     }
 
-    /// The word being sung within line `index`, as a char range into
-    /// [`crate::lrc::Line::text`].
+    /// The word being sung within line `index`, as far as it has been sung, as a
+    /// char range into [`crate::lrc::Line::text`].
+    ///
+    /// When a source times a long word in syllables the range starts at the
+    /// word's first syllable, not the syllable being sung: the word builds up —
+    /// `be`, then `believe` — instead of the screen showing a bare `lieve` that
+    /// is not a word at all.
     ///
     /// `None` before the first word starts. Inside a gap between words the
     /// previous word is kept rather than blanking the screen — the gaps are
@@ -77,7 +82,12 @@ impl Timeline {
         if started == 0 {
             return None;
         }
-        Some(line.words[started - 1].range.clone())
+        let cur = started - 1;
+        let mut first = cur;
+        while line.continues_word(first) {
+            first -= 1;
+        }
+        Some(line.words[first].range.start..line.words[cur].range.end)
     }
 
     /// How far the highlight has travelled across line `index`, in characters.

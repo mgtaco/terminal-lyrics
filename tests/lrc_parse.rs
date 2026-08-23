@@ -150,3 +150,22 @@ fn words_without_end_tags_still_run_to_the_next_one() {
     // The last word runs to the end of its line.
     assert_eq!(words[1].end, l.lines[0].end);
 }
+
+#[test]
+fn adjacent_word_tags_are_syllables_of_one_word() {
+    // Word-timed sources time a long word in pieces. The pieces are butted
+    // straight together in the text; only whitespace separates real words.
+    let l = lrc::parse("[00:10.00]<00:10.00>be<00:10.40>lieve<00:10.90> <00:11.00>it<00:11.40>\n[00:15.00]next\n");
+    let line = &l.lines[0];
+    assert_eq!(line.text, "believe it");
+    assert_eq!(line.words.len(), 3, "three timed spans, two words");
+
+    assert!(!line.continues_word(0), "the first span opens a word");
+    assert!(line.continues_word(1), "\"lieve\" continues \"be\"");
+    assert!(!line.continues_word(2), "a space starts a new word");
+
+    assert_eq!(line.word_bounds(0), Some(0..7), "\"believe\"");
+    assert_eq!(line.word_bounds(1), Some(0..7));
+    assert_eq!(line.word_bounds(2), Some(8..10), "\"it\"");
+    assert_eq!(line.word_bounds(3), None);
+}
