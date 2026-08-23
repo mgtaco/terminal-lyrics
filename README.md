@@ -136,9 +136,14 @@ driven at arbitrary "times" without sleeping.
 
 ## Limitations
 
-* Word-timed lyrics only exist for what is in the AMLL database — a couple of
-  thousand tracks. Everything else falls back to LRCLIB's line-level entries and
-  shows no moving highlight. `lyrics status` says which you got.
+* Word-timed lyrics only exist for what is in the AMLL database — about 2,400
+  entries, 1,588 distinct songs once the duplicate releases are folded together.
+  Everything else falls back to LRCLIB's line-level entries and shows no moving
+  highlight. `lyrics status` says which you got. To hear the word-by-word mode
+  without hunting for a match, this playlist collects the English-language ones:
+  [AMLL word-timed (English)](https://open.spotify.com/playlist/73AC0u1Ujko0IpNFnRxzAo),
+  429 songs. It is only the English slice — the database is around half Chinese
+  and Japanese, and those work just as well.
 * AMLL is keyed by Spotify track ID, so the word-timed path only applies when
   the player reports one. Other players still get LRCLIB.
 * Anything in neither source will not be found, and `r` will not conjure it.
