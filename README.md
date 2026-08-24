@@ -13,6 +13,11 @@ Giant block lyrics in your terminal, synced to whatever is playing.
 Run one command, play something, lyrics appear. No music library to scan, no
 pre-processing step, no Python environment.
 
+![Word-timed lyrics appearing one word at a time, a long word building up syllable by syllable](docs/demo.gif)
+
+*Rendered by the program itself. The words are written for the demo rather than
+taken from a song, so what you see is the display, not anyone's lyrics.*
+
 ## Install
 
 ```bash
