@@ -1,14 +1,25 @@
+<div align="center">
+
 # terminal-lyrics
 
-Giant block lyrics in your terminal, synced to whatever is playing.
+**Giant block lyrics in your terminal, synced to whatever is playing.**
 
-Run one command, play something, lyrics appear. No music library to scan, no
-pre-processing step, no Python environment.
+[![Rust 2024 edition](https://img.shields.io/badge/Rust-2024_edition-B7410E?style=flat-square&logo=rust&logoColor=white)](https://www.rust-lang.org)
+[![MIT licence](https://img.shields.io/github/license/mgtaco/terminal-lyrics?style=flat-square&color=8A2BE2)](LICENSE)
+[![Linux, MPRIS over D-Bus](https://img.shields.io/badge/Linux-MPRIS_%2F_D--Bus-FCC624?style=flat-square&logo=linux&logoColor=black)](#limitations)
+[![Self-contained binary](https://img.shields.io/badge/binary-self--contained-2EA44F?style=flat-square)](#install)
+[![Lyrics from LRCLIB and AMLL](https://img.shields.io/badge/lyrics-LRCLIB_%2B_AMLL-0EA5E9?style=flat-square)](#how-it-works)
+[![Code size](https://img.shields.io/github/languages/code-size/mgtaco/terminal-lyrics?style=flat-square&color=64748B)](https://github.com/mgtaco/terminal-lyrics)
 
 ![Word-timed lyrics appearing one word at a time, a long word building up syllable by syllable](docs/demo.gif)
 
-*Rendered by the program itself. The words are written for the demo rather than
-taken from a song, so what you see is the display, not anyone's lyrics.*
+<sub>Rendered by the program itself. The demo words were written for it, so what
+you see is the display, not anyone's lyrics.</sub>
+
+</div>
+
+Run one command, play something, lyrics appear. No music library to scan, no
+pre-processing step, no Python environment.
 
 ## Install
 
