@@ -18,8 +18,9 @@ you see is the display, not anyone's lyrics.</sub>
 
 </div>
 
-Run one command, play something, lyrics appear. No music library to scan, no
-pre-processing step, no Python environment.
+Run one command, play something, and the lyrics appear. There is no music
+library to scan, no pre-processing pass to sit through, and no Python
+environment to build first.
 
 ## Install
 
@@ -28,8 +29,9 @@ cargo build --release
 install -Dm755 target/release/lyrics ~/.local/bin/lyrics
 ```
 
-That is the whole install. The binary is self-contained: D-Bus is spoken
-directly and TLS is pure Rust, so there is nothing to install alongside it.
+That is the whole install, because the binary is self-contained: it speaks
+D-Bus directly and its TLS is pure Rust, so nothing needs installing alongside
+it.
 
 ## Use
 
@@ -37,10 +39,10 @@ directly and TLS is pure Rust, so there is nothing to install alongside it.
 lyrics
 ```
 
-It finds your MPRIS player, reads what is playing, downloads synced lyrics, and
-displays them in block letters. Lyrics that carry real per-word timings are
-shown **one word at a time**, each word appearing as it is sung; line-level
-lyrics are shown a phrase at a time.
+It finds your MPRIS player, reads what is playing, downloads synced lyrics and
+draws them in block letters. Where the lyrics carry real per-word timings they
+appear **one word at a time**, each word arriving as it is sung, while
+line-level lyrics are shown a phrase at a time.
 
 | key | |
 |---|---|
@@ -53,11 +55,13 @@ lyrics are shown a phrase at a time.
 | `s` | cycle the highlight: never → auto → always |
 | `r` | forget the cached lyrics and look them up again |
 
-Useful flags: `--whole-lines` to always show the full phrase, `--sweep` to
-highlight the sung part of what is on screen (off by default), `--player
-spotify` to pin a player when several are running, `--font compact`, `--offset-ms -250` when a particular LRC file is
-timed badly, `--lrc-dir ~/lyrics` to prefer your own `Artist - Title.lrc` files,
-`--no-network` to use only those and the cache.
+A few flags are worth knowing. `--whole-lines` always shows the full phrase,
+`--sweep` highlights the sung part of whatever is on screen, and `--font
+compact` picks a smaller face. If several players are running, `--player
+spotify` pins the one you mean, and `--offset-ms -250` rescues a file that was
+timed badly. To work from your own lyrics rather than the network,
+`--lrc-dir ~/lyrics` prefers your `Artist - Title.lrc` files, and `--no-network`
+restricts it to those and the cache.
 
 ## Without the TUI
 
@@ -69,78 +73,89 @@ lyrics fetch --artist "Kanye West" --title "Flashing Lights" \
 lyrics paths                  # where the config and cache live
 ```
 
-`status` is the first thing to run when something is not working: it prints
-every player and what it is doing, the track it sees, the length the player
-reported, the cache key, whether the lyrics carry real word timings, and where
-they came from. The strip along the bottom of the visualiser deliberately shows
-only that last part — the source — so it stays out of the way of the lyrics.
+When something is not working, `status` is the place to start, since it prints
+every player and what each one is doing, along with the track it settled on, the
+length the player reported, the cache key, whether the lyrics carry real word
+timings and where they came from. The strip along the bottom of the visualiser
+shows only that last part, the source, so that it stays out of the way of the
+lyrics.
 
 ## Configuration
 
-`~/.config/terminal-lyrics/config.toml`; see `config.example.toml` for every
-key. Flags override the file, the file overrides the defaults, and there is a
-test asserting that per field.
+Settings live in `~/.config/terminal-lyrics/config.toml`, and
+`config.example.toml` lists every key. Flags override the file and the file
+overrides the defaults, with a test asserting that ordering field by field.
 
 ## How it works
 
-**Choosing a player.** With no `--player`, the one that is actually playing
-wins, then one with a track loaded, then anything else, with the name as a
-stable tiebreak. Taking the first name alphabetically is wrong in practice:
-browsers register idle MPRIS instances (`chromium.instance26065`) that sort
-before `spotify` and report no track. `lyrics status` lists what each player is
-doing.
+**Choosing a player.** Without `--player`, whichever player is actually playing
+wins, followed by one with a track loaded and then anything else, with the bus
+name as a stable tiebreak. Simply taking the first name alphabetically turns out
+to be wrong in practice, because browsers register idle MPRIS instances such as
+`chromium.instance26065` that sort ahead of `spotify` while reporting no track
+at all. If the wrong one is being picked, `lyrics status` lists what each of
+them is doing.
 
-**Position.** The player is asked once, and after that the position is
-interpolated from a monotonic clock. Property changes and `Seeked` re-anchor it;
-a 1 Hz `Position` read catches players that seek without saying so — Spotify
-among them. No subprocesses.
+**Position.** The player is asked once and the position is interpolated from a
+monotonic clock from then on, re-anchoring whenever a property changes or a
+`Seeked` signal arrives. A 1 Hz `Position` read covers the players that seek
+without announcing it, Spotify among them, and none of this costs a
+subprocess.
 
 **Sources.** `--lrc-dir` first, then the cache, then two networks in order:
 
-* the [AMLL TTML database](https://github.com/amll-dev/amll-ttml-db) — CC0,
-  community-maintained, **word-by-word**, and keyed by the Spotify track ID the
-  player already hands us, so it needs no search and no matching guesswork.
-  Around 2,400 tracks, so it is tried first and misses often.
-* [LRCLIB](https://lrclib.net) — millions of tracks, line-level only. Every
-  `syncedLyrics` entry sampled (923 of them) was line-level, which is why the
-  word highlight needs the first source to be worth having.
+* the [AMLL TTML database](https://github.com/amll-dev/amll-ttml-db), which is
+  CC0, community-maintained and **word-by-word**, and which is keyed by the
+  Spotify track ID the player already hands us, so it needs neither a search nor
+  any matching guesswork. It holds only about 2,400 entries, so it is tried
+  first and misses often.
+* [LRCLIB](https://lrclib.net), which has millions of tracks but line-level
+  timing only. Every one of the 923 `syncedLyrics` entries sampled was
+  line-level, which is why the word-by-word display depends on the first source
+  being worth having.
 
-**Matching LRCLIB.** An exact `/api/get` with artist, title, album and duration,
-then without the album, then a scored `/api/search`, then a retry with
-`- Remastered 2011` and `(feat. …)` stripped.
-Candidates more than five seconds from the track's real length are rejected
-rather than shown out of sync. Misses are cached for a day so a track LRCLIB has
-never heard of is not re-queried on every play.
+**Matching LRCLIB.** The lookup starts with an exact `/api/get` on artist,
+title, album and duration, retries without the album, falls back to a scored
+`/api/search`, and finally tries once more with decorations like
+`- Remastered 2011` and `(feat. …)` stripped from the title. Candidates more
+than five seconds away from the track's real length are rejected rather than
+displayed out of sync, and misses are cached for a day so that a track LRCLIB
+has never heard of is not queried again on every play.
 
-**Word timing.** What is on screen follows the lyrics, not a preference. A
-source with real per-word timestamps — in practice an AMLL hit — is shown one
-word at a time, each word appearing on its own timestamp. A line-level source
-has nothing to split on, so it is shown whole. The decision is made per line, so
-a file carrying tags on only some lines still shows the rest in full.
+**Word timing.** What appears on screen follows the lyrics rather than a
+preference. A source carrying real per-word timestamps, which in practice means
+an AMLL hit, is shown one word at a time with each word appearing on its own
+timestamp, whereas a line-level source has nothing to split on and so is shown
+whole. Because that decision is made per line rather than per file, a file that
+carries tags on only some of its lines still shows the rest in full. Where a
+long word is timed in pieces, the pieces build the word up in place instead of
+flashing a syllable on its own.
 
-**Highlight.** Separate, and off by default. `--sweep` highlights the sung part
-of whatever is on screen: across the current word in word-by-word mode, across
-the phrase otherwise. For line-level lyrics that highlight is interpolated from
-character counts between two real timestamps — an estimate, and `lyrics status`
-labels it as one. It is only ever a display effect; nothing invented is written
-to disk.
+**Highlight.** The highlight is a separate thing and is off unless you ask for
+it. `--sweep` lights up the sung part of whatever is on screen, moving across
+the current word in word-by-word mode and across the phrase otherwise. For
+line-level lyrics it has to be interpolated from character counts between two
+real timestamps, which makes it an estimate, and `lyrics status` labels it as
+one. It remains a display effect throughout: nothing invented is ever written to
+disk.
 
-**Drawing.** ratatui diffs the screen buffer, so an unchanged frame emits no
-bytes. Lines wrap at word boundaries and the font steps down before anything is
-clipped; nothing is ever truncated.
+**Drawing.** ratatui diffs the screen buffer, so a frame that has not changed
+emits no bytes at all. Lines wrap at word boundaries and the font steps down a
+size before anything would be clipped, so nothing is ever truncated.
 
 ## Development
 
 ```bash
-cargo test                      # 90 tests, no terminal or player needed
+cargo test                      # 95 tests, no terminal or player needed
 cargo clippy --all-targets -- -D warnings
 cargo run --example pump_dump -- 15   # dump the live player event stream
 ```
 
-The pure parts — parser, timeline, clock, config layering, layout, match
-scoring — live behind a library target and are tested without a bus or a TTY.
-`src/player/fake.rs` replays a scripted event timeline so the sync engine can be
-driven at arbitrary "times" without sleeping.
+The pure parts — the parser, timeline, clock, config layering, layout and match
+scoring — sit behind a library target so they can be tested without a bus or a
+TTY. For the parts that cannot be pure, `src/player/fake.rs` replays a scripted
+event timeline, which lets the sync engine be driven at arbitrary "times"
+without any sleeping.
 
 ## Limitations
 
@@ -152,22 +167,24 @@ driven at arbitrary "times" without sleeping.
   [AMLL word-timed (English)](https://open.spotify.com/playlist/73AC0u1Ujko0IpNFnRxzAo),
   429 songs. It is only the English slice — the database is around half Chinese
   and Japanese, and those work just as well.
-* AMLL is keyed by Spotify track ID, so the word-timed path only applies when
-  the player reports one. Other players still get LRCLIB.
-* Anything in neither source will not be found, and `r` will not conjure it.
-* MPRIS only. A player that does not expose an MPRIS interface is invisible.
+* Because AMLL is keyed by Spotify track ID, the word-timed path only applies
+  when the player reports one, though other players still get LRCLIB.
+* Anything held by neither source will not be found, and pressing `r` will not
+  conjure it into existence.
+* Only MPRIS players are visible, so anything that does not expose an MPRIS
+  interface goes unnoticed.
 
 ## Credit
 
 The idea and the big block-letter look come from
 [tacos-terminal-lyrics](https://github.com/tacoproz1/tacos-terminal-lyrics) by
-tacoproz1. This is a separate program written from scratch in Rust, not a fork
-of it, and it takes a different approach: no music library to scan and no
-pre-processing pass.
+tacoproz1. This is a separate program written from scratch in Rust rather than a
+fork of that one, and it takes a different approach, with no music library to
+scan and no pre-processing pass.
 
 Lyrics come from [LRCLIB](https://lrclib.net) and the
-[AMLL TTML database](https://github.com/amll-dev/amll-ttml-db) (CC0). Neither is
-affiliated with this project.
+[AMLL TTML database](https://github.com/amll-dev/amll-ttml-db) (CC0), neither of
+which is affiliated with this project.
 
 ## License
 
