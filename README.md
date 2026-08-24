@@ -30,8 +30,9 @@ install -Dm755 target/release/lyrics ~/.local/bin/lyrics
 ```
 
 That is the whole install, because the binary is self-contained: it speaks
-D-Bus directly and its TLS is pure Rust, so nothing needs installing alongside
-it.
+D-Bus directly and links its TLS in statically, so nothing needs installing
+alongside it. The only shared libraries it wants are the C runtime, which is
+already on your system.
 
 ## Use
 
