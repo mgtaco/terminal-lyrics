@@ -18,8 +18,7 @@ use crate::config::Config;
 use crate::lyrics::cache::Cache;
 use crate::lyrics::lrclib::{self, LrcLib};
 use crate::lyrics::{Outcome, Source};
-use crate::player::mpris::MprisPlayerHandle;
-use crate::player::{EventRx, PlayerEvent, Track};
+use crate::player::{EventRx, PlayerEvent, PlayerHandle, Track};
 use crate::render::font::{self, Font};
 use crate::render::{Screen, Theme};
 use crate::sync::{Change, SyncEngine};
@@ -103,7 +102,7 @@ impl App {
 /// Run the visualiser until the user quits or the player disappears.
 pub async fn run(
     cfg: Config,
-    player: MprisPlayerHandle,
+    player: PlayerHandle,
     events: EventRx,
     cache: Cache,
     client: Option<LrcLib>,
@@ -116,7 +115,7 @@ pub async fn run(
 
 async fn run_inner(
     cfg: Config,
-    player: MprisPlayerHandle,
+    player: PlayerHandle,
     mut events: EventRx,
     cache: Cache,
     client: Option<LrcLib>,
@@ -398,7 +397,7 @@ fn apply_fetch(app: &mut App, result: FetchResult) {
 async fn handle_key(
     app: &mut App,
     key: KeyEvent,
-    player: &MprisPlayerHandle,
+    player: &PlayerHandle,
     cache: &std::sync::Arc<Cache>,
     client: &Option<std::sync::Arc<LrcLib>>,
     tx: &mpsc::UnboundedSender<FetchResult>,

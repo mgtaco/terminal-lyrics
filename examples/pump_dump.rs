@@ -2,14 +2,14 @@
 //! engine makes of it. `cargo run --example pump_dump -- [seconds]`.
 use std::time::{Duration, Instant};
 
-use terminal_lyrics::player::mpris::{self, MprisPlayerHandle};
+use terminal_lyrics::player::Session;
 use terminal_lyrics::sync::SyncEngine;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let conn = zbus::Connection::session().await?;
-    let name = mpris::resolve_player(&conn, None).await?;
-    let handle = MprisPlayerHandle::connect(&conn, &name).await?;
+    let session = Session::open().await?;
+    let name = session.resolve(None).await?;
+    let handle = session.connect(&name).await?;
     let (mut rx, _pump) = handle.spawn(Duration::from_secs(1));
 
     let seconds: u64 = std::env::args()

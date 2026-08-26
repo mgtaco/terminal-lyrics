@@ -15,12 +15,12 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
 use tokio::sync::mpsc;
 use zbus::zvariant::OwnedValue;
 use zbus::{Connection, proxy};
 
-use super::{EventRx, EventTx, PlayerEvent, Track};
+use super::{EventRx, EventTx, PlayerEvent, PlayerState, Snapshot, Track, fallback_id};
 
 const MPRIS_PREFIX: &str = "org.mpris.MediaPlayer2.";
 const MPRIS_PATH: &str = "/org/mpris/MediaPlayer2";
@@ -126,9 +126,7 @@ pub fn track_from_metadata(md: &HashMap<String, OwnedValue>) -> Option<Track> {
         .filter(|s| !s.is_empty());
     // `s` on Spotify, `o` per spec.
     let trackid = md.get("mpris:trackid").and_then(lenient_string);
-    let id = url
-        .or(trackid)
-        .unwrap_or_else(|| format!("{artist}\u{1}{title}"));
+    let id = url.or(trackid).unwrap_or_else(|| fallback_id(&artist, &title));
 
     Some(Track {
         id,
@@ -143,128 +141,87 @@ fn status_is_playing(s: &str) -> bool {
     s.eq_ignore_ascii_case("playing")
 }
 
-/// Every MPRIS name currently on the session bus, e.g. `spotify`, `vlc`.
-pub async fn list_players(conn: &Connection) -> Result<Vec<String>> {
-    let dbus = zbus::fdo::DBusProxy::new(conn)
-        .await
-        .context("failed to open the D-Bus daemon proxy")?;
-    let mut names: Vec<String> = dbus
-        .list_names()
-        .await
-        .context("failed to list bus names")?
-        .into_iter()
-        .filter_map(|n| {
-            n.as_str()
-                .strip_prefix(MPRIS_PREFIX)
-                .map(|s| s.to_string())
-        })
-        .collect();
-    names.sort();
-    names.dedup();
-    Ok(names)
+
+/// A connection to the session bus. One per process is plenty.
+pub struct Session {
+    conn: Connection,
 }
 
-/// What a candidate player looks like right now, for ranking.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PlayerState {
-    pub name: String,
-    pub playing: bool,
-    pub has_track: bool,
-}
+impl Session {
+    pub async fn open() -> Result<Self> {
+        let conn = Connection::session()
+            .await
+            .context("could not reach the session bus — is this a desktop session?")?;
+        Ok(Self { conn })
+    }
 
-/// Choose between players when the user has not named one.
-///
-/// Taking the first name alphabetically is wrong in practice: a browser
-/// registers an idle `org.mpris.MediaPlayer2.chromium.instance…` that sorts
-/// before `spotify` and reports no track at all, so the visualiser would follow
-/// silence while music played next to it. Something actually playing wins.
-pub fn rank_players(mut candidates: Vec<PlayerState>) -> Option<PlayerState> {
-    fn score(p: &PlayerState) -> u8 {
-        match (p.playing, p.has_track) {
-            (true, true) => 3,
-            (false, true) => 2,
-            (true, false) => 1,
-            (false, false) => 0,
+    /// Every MPRIS name currently on the session bus, e.g. `spotify`, `vlc`.
+    pub async fn list(&self) -> Result<Vec<String>> {
+        let dbus = zbus::fdo::DBusProxy::new(&self.conn)
+            .await
+            .context("failed to open the D-Bus daemon proxy")?;
+        let mut names: Vec<String> = dbus
+            .list_names()
+            .await
+            .context("failed to list bus names")?
+            .into_iter()
+            .filter_map(|n| n.as_str().strip_prefix(MPRIS_PREFIX).map(|s| s.to_string()))
+            .collect();
+        names.sort();
+        names.dedup();
+        Ok(names)
+    }
+
+    /// Ask every player on the bus what it is doing.
+    pub async fn survey(&self) -> Result<Vec<PlayerState>> {
+        let names = self.list().await?;
+        let mut out = Vec::with_capacity(names.len());
+        for name in names {
+            let (playing, has_track) = match self.connect(&name).await {
+                Ok(h) => (
+                    h.playing().await,
+                    h.track().await.is_some_and(|t| t.is_usable()),
+                ),
+                Err(_) => (false, false),
+            };
+            out.push(PlayerState {
+                name,
+                playing,
+                has_track,
+            });
         }
+        Ok(out)
     }
-    // Name as the tiebreak, so the choice is stable between runs.
-    candidates.sort_by(|a, b| score(b).cmp(&score(a)).then_with(|| a.name.cmp(&b.name)));
-    candidates.into_iter().next()
-}
 
-/// Ask every player on the bus what it is doing.
-pub async fn survey(conn: &Connection) -> Result<Vec<PlayerState>> {
-    let names = list_players(conn).await?;
-    let mut out = Vec::with_capacity(names.len());
-    for name in names {
-        let (playing, has_track) = match MprisPlayerHandle::connect(conn, &name).await {
-            Ok(h) => (h.playing().await, h.track().await.is_some_and(|t| t.is_usable())),
-            Err(_) => (false, false),
-        };
-        out.push(PlayerState {
-            name,
-            playing,
-            has_track,
-        });
+    /// Pick the player to follow. `wanted` matches either the short name
+    /// (`spotify`) or the full bus name.
+    pub async fn resolve(&self, wanted: Option<&str>) -> Result<String> {
+        // Accept the fully-qualified bus name as well as the short one.
+        let wanted = wanted.map(|w| w.trim().trim_start_matches(MPRIS_PREFIX));
+        super::choose(self.survey().await?, wanted, "MPRIS player on the session bus")
     }
-    Ok(out)
-}
 
-/// Pick the player to follow. `wanted` matches case-insensitively on either the
-/// short name (`spotify`) or the full bus name.
-pub async fn resolve_player(conn: &Connection, wanted: Option<&str>) -> Result<String> {
-    let players = list_players(conn).await?;
-    if players.is_empty() {
-        return Err(anyhow!(
-            "no MPRIS player found on the session bus — start a player and try again"
-        ));
-    }
-    match wanted {
-        None => {
-            let ranked = rank_players(survey(conn).await?);
-            Ok(ranked.map(|p| p.name).unwrap_or_else(|| players[0].clone()))
-        }
-        Some(w) => {
-            let w = w.trim().trim_start_matches(MPRIS_PREFIX);
-            players
-                .iter()
-                .find(|p| p.eq_ignore_ascii_case(w))
-                .or_else(|| {
-                    players
-                        .iter()
-                        .find(|p| p.to_lowercase().starts_with(&w.to_lowercase()))
-                })
-                .cloned()
-                .ok_or_else(|| {
-                    anyhow!(
-                        "no MPRIS player matching {w:?}; available: {}",
-                        players.join(", ")
-                    )
-                })
-        }
-    }
-}
-
-pub struct MprisPlayerHandle {
-    proxy: MprisPlayerProxy<'static>,
-    pub name: String,
-}
-
-impl MprisPlayerHandle {
-    pub async fn connect(conn: &Connection, name: &str) -> Result<Self> {
+    pub async fn connect(&self, name: &str) -> Result<PlayerHandle> {
         let bus_name = format!("{MPRIS_PREFIX}{name}");
-        let proxy = MprisPlayerProxy::builder(conn)
+        let proxy = MprisPlayerProxy::builder(&self.conn)
             .destination(bus_name.clone())?
             .path(MPRIS_PATH)?
             .build()
             .await
             .with_context(|| format!("failed to connect to {bus_name}"))?;
-        Ok(Self {
+        Ok(PlayerHandle {
             proxy,
             name: name.to_string(),
         })
     }
+}
 
+pub struct PlayerHandle {
+    proxy: MprisPlayerProxy<'static>,
+    pub name: String,
+}
+
+impl PlayerHandle {
     pub async fn track(&self) -> Option<Track> {
         let md = self.proxy.metadata().await.ok()?;
         track_from_metadata(&md)
@@ -280,6 +237,18 @@ impl MprisPlayerHandle {
             .await
             .map(|s| status_is_playing(&s))
             .unwrap_or(false)
+    }
+
+    /// Everything at once. Three bus reads here, which is what the pump did
+    /// inline before; on macOS the same call is one subprocess instead of three.
+    /// `None` means the player has gone away.
+    pub async fn snapshot(&self) -> Option<Snapshot> {
+        let position = self.position().await?;
+        Some(Snapshot {
+            playing: self.playing().await,
+            position,
+            track: self.track().await,
+        })
     }
 
     pub async fn rate(&self) -> f64 {

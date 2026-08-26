@@ -6,7 +6,7 @@
 
 [![Rust 2024 edition](https://img.shields.io/badge/Rust-2024_edition-B7410E?style=flat-square&logo=rust&logoColor=white)](https://www.rust-lang.org)
 [![MIT licence](https://img.shields.io/github/license/mgtaco/terminal-lyrics?style=flat-square&color=8A2BE2)](LICENSE)
-[![Linux, MPRIS over D-Bus](https://img.shields.io/badge/Linux-MPRIS_%2F_D--Bus-FCC624?style=flat-square&logo=linux&logoColor=black)](#limitations)
+[![Linux and macOS](https://img.shields.io/badge/Linux_%2B_macOS-MPRIS_%2F_AppleScript-64748B?style=flat-square)](#platforms)
 [![Self-contained binary](https://img.shields.io/badge/binary-self--contained-2EA44F?style=flat-square)](#install)
 [![Lyrics from LRCLIB and AMLL](https://img.shields.io/badge/lyrics-LRCLIB_%2B_AMLL-0EA5E9?style=flat-square)](#how-it-works)
 [![Code size](https://img.shields.io/github/languages/code-size/mgtaco/terminal-lyrics?style=flat-square&color=64748B)](https://github.com/mgtaco/terminal-lyrics)
@@ -26,13 +26,21 @@ environment to build first.
 
 ```bash
 cargo build --release
-install -Dm755 target/release/lyrics ~/.local/bin/lyrics
+mkdir -p ~/.local/bin && install -m755 target/release/lyrics ~/.local/bin/lyrics
 ```
 
-That is the whole install, because the binary is self-contained: it speaks
-D-Bus directly and links its TLS in statically, so nothing needs installing
-alongside it. The only shared libraries it wants are the C runtime, which is
-already on your system.
+(`install -D` would make the directory for you, but only on Linux: the `-D` that
+macOS ships is a different flag entirely.)
+
+That is the whole install, because the binary is self-contained: it links its
+TLS in statically and talks to your player through whatever the platform already
+provides, so nothing needs installing alongside it. The only shared libraries it
+wants are the C runtime, which is already on your system.
+
+On macOS the first run raises the standard Automation prompt, because reading
+what Spotify is playing means sending it an Apple event. Allow it once and it
+stops asking. If you refuse and change your mind, the switch is under System
+Settings → Privacy & Security → Automation.
 
 ## Use
 
@@ -40,7 +48,7 @@ already on your system.
 lyrics
 ```
 
-It finds your MPRIS player, reads what is playing, downloads synced lyrics and
+It finds your player, reads what is playing, downloads synced lyrics and
 draws them in block letters. Where the lyrics carry real per-word timings they
 appear **one word at a time**, each word arriving as it is sung, while
 line-level lyrics are shown a phrase at a time.
@@ -83,25 +91,28 @@ lyrics.
 
 ## Configuration
 
-Settings live in `~/.config/terminal-lyrics/config.toml`, and
-`config.example.toml` lists every key. Flags override the file and the file
-overrides the defaults, with a test asserting that ordering field by field.
+Settings live in `~/.config/terminal-lyrics/config.toml`, or
+`~/Library/Application Support/terminal-lyrics/config.toml` on macOS; `lyrics
+paths` prints the one this build actually reads. `config.example.toml` lists
+every key. Flags override the file and the file overrides the defaults, with a
+test asserting that ordering field by field.
 
 ## How it works
 
 **Choosing a player.** Without `--player`, whichever player is actually playing
-wins, followed by one with a track loaded and then anything else, with the bus
-name as a stable tiebreak. Simply taking the first name alphabetically turns out
-to be wrong in practice, because browsers register idle MPRIS instances such as
+wins, followed by one with a track loaded and then anything else, with the name
+as a stable tiebreak. Simply taking the first name alphabetically turns out to be
+wrong in practice, because browsers register idle MPRIS instances such as
 `chromium.instance26065` that sort ahead of `spotify` while reporting no track
-at all. If the wrong one is being picked, `lyrics status` lists what each of
-them is doing.
+at all. That ranking is platform-neutral and shared by both backends. If the
+wrong one is being picked, `lyrics status` lists what each of them is doing.
 
 **Position.** The player is asked once and the position is interpolated from a
-monotonic clock from then on, re-anchoring whenever a property changes or a
-`Seeked` signal arrives. A 1 Hz `Position` read covers the players that seek
-without announcing it, Spotify among them, and none of this costs a
-subprocess.
+monotonic clock from then on, re-anchoring whenever the player says something.
+A 1 Hz position read covers the players that seek without announcing it, Spotify
+among them. On Linux that read costs no subprocess at all; on macOS it is one
+short-lived `osascript`, which is also what makes a scrub show up within a
+second there despite AppleScript having no seek notification to offer.
 
 **Sources.** `--lrc-dir` first, then the cache, then two networks in order:
 
@@ -144,10 +155,37 @@ disk.
 emits no bytes at all. Lines wrap at word boundaries and the font steps down a
 size before anything would be clipped, so nothing is ever truncated.
 
+## Platforms
+
+The program is the same everywhere; only the way it finds your player differs,
+and that lives behind one seam in `src/player/`. Exactly one backend is compiled
+into a given binary, so a Linux package never carries the macOS code or the other
+way round.
+
+**Linux** talks MPRIS over D-Bus, directly, with no subprocess anywhere: property
+changes and `Seeked` arrive as signals. Anything exposing an MPRIS interface
+works, which is most things.
+
+**macOS** drives Spotify and Apple Music through their scripting dictionaries,
+polled once a second. It knows those two by name rather than discovering players
+generally, because there is nothing left to discover with: the MediaRemote
+framework every now-playing tool used to call was restricted to entitled
+applications in macOS 15.4. The trade is a fair one, since Spotify's dictionary
+hands back a `spotify:track:` ID, which is exactly the key the word-by-word
+database is stored under — so the best part of the program survives the crossing
+intact. Neither app is ever launched by this program; one that is not already
+running simply is not listed.
+
+**Windows** is not supported yet. The shape of it is clear — the
+`GlobalSystemMediaTransportControlsSessionManager` API carries title, artist,
+album, status and position — but it would arrive with no Spotify track ID, and so
+no word-by-word lyrics, and nobody here can test it. There is a placeholder
+backend that says so rather than failing obscurely.
+
 ## Development
 
 ```bash
-cargo test                      # 95 tests, no terminal or player needed
+cargo test                      # 109 tests, no terminal or player needed
 cargo clippy --all-targets -- -D warnings
 cargo run --example pump_dump -- 15   # dump the live player event stream
 ```
@@ -156,7 +194,10 @@ The pure parts — the parser, timeline, clock, config layering, layout and matc
 scoring — sit behind a library target so they can be tested without a bus or a
 TTY. For the parts that cannot be pure, `src/player/fake.rs` replays a scripted
 event timeline, which lets the sync engine be driven at arbitrary "times"
-without any sleeping.
+without any sleeping. The macOS backend is split the same way: everything with a
+decision in it is in `parse_probe`, so the only untested line is the one that
+spawns `osascript`, which no test may do — it would prompt for Automation access
+on a developer's machine and fail outright in CI.
 
 ## Limitations
 
@@ -172,8 +213,13 @@ without any sleeping.
   when the player reports one, though other players still get LRCLIB.
 * Anything held by neither source will not be found, and pressing `r` will not
   conjure it into existence.
-* Only MPRIS players are visible, so anything that does not expose an MPRIS
-  interface goes unnoticed.
+* On Linux, only MPRIS players are visible, so anything that does not expose an
+  MPRIS interface goes unnoticed. On macOS it is narrower still: Spotify and
+  Apple Music, and nothing else. See [Platforms](#platforms).
+* macOS needs Automation permission for the player you use. Refuse the prompt and
+  the program says so and points at the setting, rather than reporting that
+  nothing is playing.
+* Windows is not supported yet.
 
 ## Credit
 

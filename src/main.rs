@@ -2,16 +2,15 @@
 
 use std::time::Duration;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::Parser;
-use zbus::Connection;
 
 use terminal_lyrics::cli::{Cli, Command};
 use terminal_lyrics::config::{self, Config, ConfigFile};
 use terminal_lyrics::lyrics::cache::Cache;
 use terminal_lyrics::lyrics::lrclib::{self, LrcLib};
 use terminal_lyrics::lyrics::{Outcome, Source};
-use terminal_lyrics::player::mpris::{self, MprisPlayerHandle};
+use terminal_lyrics::player::Session;
 use terminal_lyrics::tui;
 
 /// How often to read `Position` from the player. This is the safety net for
@@ -116,13 +115,11 @@ async fn cmd_fetch(
 
 /// Everything the visualiser would resolve, printed as plain lines.
 async fn cmd_status(cfg: &Config) -> Result<()> {
-    let conn = Connection::session()
-        .await
-        .context("could not reach the session bus")?;
+    let session = Session::open().await?;
 
     // Show what each player is doing, so "it followed the wrong one" is
     // answerable at a glance.
-    let survey = mpris::survey(&conn).await?;
+    let survey = session.survey().await?;
     if survey.is_empty() {
         println!("players   (none)");
     } else {
@@ -140,7 +137,7 @@ async fn cmd_status(cfg: &Config) -> Result<()> {
         println!("players   {}", described.join(", "));
     }
 
-    let name = mpris::resolve_player(&conn, cfg.player.as_deref()).await?;
+    let name = session.resolve(cfg.player.as_deref()).await?;
     println!("following {name}");
     println!(
         "offset    {}ms{}",
@@ -154,7 +151,7 @@ async fn cmd_status(cfg: &Config) -> Result<()> {
         }
     );
 
-    let handle = MprisPlayerHandle::connect(&conn, &name).await?;
+    let handle = session.connect(&name).await?;
     let playing = handle.playing().await;
     let position = handle.position().await;
     let track = handle.track();
@@ -244,14 +241,12 @@ fn report_lyrics(cfg: &Config, found: &terminal_lyrics::lyrics::Found) {
 }
 
 async fn cmd_run(cfg: Config) -> Result<()> {
-    let conn = Connection::session()
-        .await
-        .context("could not reach the session bus — is this a desktop session?")?;
-    let name = mpris::resolve_player(&conn, cfg.player.as_deref()).await?;
-    let handle = MprisPlayerHandle::connect(&conn, &name).await?;
+    let session = Session::open().await?;
+    let name = session.resolve(cfg.player.as_deref()).await?;
+    let handle = session.connect(&name).await?;
 
     // The pump needs its own handle; the UI keeps one for play/pause.
-    let control = MprisPlayerHandle::connect(&conn, &name).await?;
+    let control = session.connect(&name).await?;
     let (events, pump) = handle.spawn(POLL_INTERVAL);
 
     let cache = Cache::new(config::cache_dir());

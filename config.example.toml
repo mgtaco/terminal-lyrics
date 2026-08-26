@@ -2,7 +2,9 @@
 # Copy to ~/.config/terminal-lyrics/config.toml — every key is optional, and
 # every one of them is also a command-line flag, which takes precedence.
 
-# MPRIS player to follow. Omit to use the first one found.
+# Which player to follow. Omit to let the program choose, which prefers whatever
+# is actually playing. On Linux this is an MPRIS name, e.g. "spotify" or "vlc";
+# on macOS it is "spotify" or "music". A prefix is enough.
 # player = "spotify"
 
 # "block" (5 rows), "compact" (3 rows) or "mini" (plain text).

@@ -28,7 +28,16 @@ thiserror = "2.0.20"
 tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "time", "signal", "sync"] }
 toml = "1.1.4"
 unicode-width = "0.2.2"
+
+# The player backend is chosen at compile time; see src/player/mod.rs. Gating the
+# dependency here is what lets a Linux package build without ever fetching the
+# other platforms' code, and what lets this crate build at all off Linux.
+[target.'cfg(target_os = "linux")'.dependencies]
 zbus = { version = "5.19.0", default-features = false, features = ["tokio"] }
+
+# The macOS backend shells out to osascript; nothing else needs tokio::process.
+[target.'cfg(target_os = "macos")'.dependencies]
+tokio = { version = "1.53.1", features = ["process"] }
 
 [profile.release]
 lto = true

@@ -5,7 +5,7 @@
 //! and reports no track, so taking the first name alphabetically meant
 //! following silence while music played next to it.
 
-use terminal_lyrics::player::mpris::{PlayerState, rank_players};
+use terminal_lyrics::player::{PlayerState, rank_players};
 
 fn player(name: &str, playing: bool, has_track: bool) -> PlayerState {
     PlayerState {
