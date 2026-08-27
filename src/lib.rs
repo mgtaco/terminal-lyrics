@@ -13,6 +13,7 @@ pub mod cli;
 pub mod config;
 pub mod lrc;
 pub mod lyrics;
+pub mod offsets;
 pub mod player;
 pub mod render;
 pub mod sync;

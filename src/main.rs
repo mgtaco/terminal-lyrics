@@ -9,6 +9,7 @@ use terminal_lyrics::cli::{Cli, Command};
 use terminal_lyrics::config::{self, Config, ConfigFile};
 use terminal_lyrics::lyrics::cache::Cache;
 use terminal_lyrics::lyrics::{self, Net, Outcome, Source};
+use terminal_lyrics::offsets::Offsets;
 use terminal_lyrics::player::{Session, Track};
 use terminal_lyrics::tui;
 
@@ -35,6 +36,16 @@ async fn main() -> Result<()> {
             };
             println!("config  {}", show(config_path));
             println!("cache   {}", show(config::cache_dir()));
+            let offsets = Offsets::new(config::offsets_path());
+            println!(
+                "offsets {}{}",
+                show(config::offsets_path()),
+                match offsets.len() {
+                    0 => String::new(),
+                    1 => "  (1 song tuned)".to_string(),
+                    n => format!("  ({n} songs tuned)"),
+                }
+            );
             Ok(())
         }
         Some(Command::Fetch {
@@ -145,7 +156,7 @@ async fn cmd_status(cfg: &Config) -> Result<()> {
     let name = session.resolve(cfg.player.as_deref()).await?;
     println!("following {name}");
     println!(
-        "offset    {}ms{}",
+        "offset    {}ms{}  — where a song starts before you nudge it",
         cfg.offset_ms,
         if cfg.offset_ms == 0 {
             ""
@@ -185,6 +196,10 @@ async fn cmd_status(cfg: &Config) -> Result<()> {
             .unwrap_or_else(|| "(not reported)".into())
     );
     println!("cache key {}", track.id);
+    match Offsets::new(config::offsets_path()).get(&track.id) {
+        Some(ms) => println!("tuned     {ms:+}ms  (saved for this song)"),
+        None => println!("tuned     no  (using the default above)"),
+    }
     println!(
         "providers {}",
         if cfg.providers.is_empty() {
@@ -268,8 +283,9 @@ async fn cmd_run(cfg: Config) -> Result<()> {
 
     let cache = Cache::new(config::cache_dir());
     let client = client_for(&cfg)?;
+    let offsets = Offsets::new(config::offsets_path());
 
-    let result = tui::run(cfg, control, events, cache, client).await;
+    let result = tui::run(cfg, control, events, cache, client, offsets).await;
     pump.abort();
     result
 }

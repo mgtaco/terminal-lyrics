@@ -23,13 +23,18 @@ provider ordering and matching in full.
 - Player picking stays platform-neutral: playing beats has-a-track beats
   anything else, name as tiebreak.
 - Nothing interpolated (e.g. the sweep highlight) is ever written to disk.
+- The sync nudge is per track, keyed by the same id as the lyrics cache, and
+  saved under the data dir rather than the cache dir — it is the user's own
+  correction, and a cache is by definition safe to delete. Only tuned tracks get
+  an entry: `config.offset_ms` is the starting point for the rest, and a song
+  reset to it is deleted rather than stored.
 - Tests must never shell out to `osascript` — it would prompt for Automation
   access. Keep macOS decisions in `parse_probe`.
 
 ## Working on it
 
 ```bash
-cargo test                              # 142 tests, no terminal or player needed
+cargo test                              # 151 tests, no terminal or player needed
 cargo clippy --all-targets -- -D warnings
 cargo run --example pump_dump -- 15     # dump the live player event stream
 lyrics status                           # what it sees: player, track, source

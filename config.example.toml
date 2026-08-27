@@ -11,7 +11,10 @@
 # The visualiser steps down automatically when the terminal is too small.
 font = "block"
 
-# Shift lyrics in milliseconds; positive shows them later.
+# Where a song starts before you nudge it, in milliseconds; positive shows the
+# lyrics later. Nudging with `,` and `.` saves that song's own offset, which is
+# used instead the next time it comes on; `0` forgets it and returns the song to
+# this value. `lyrics paths` prints the file the per-song offsets live in.
 offset_ms = 0
 
 # Check this directory for "Artist - Title.lrc" before querying the network.

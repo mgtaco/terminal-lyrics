@@ -62,6 +62,9 @@ impl Sweep {
 pub struct Config {
     pub player: Option<String>,
     pub font: String,
+    /// Where a track that has never been nudged starts. A track the user has
+    /// corrected with `,` / `.` keeps its own offset instead; see
+    /// [`crate::offsets`].
     pub offset_ms: i64,
     pub lrc_dir: Option<PathBuf>,
     pub network: bool,
@@ -195,4 +198,12 @@ pub fn default_config_path() -> Option<PathBuf> {
 /// `$XDG_CACHE_HOME/terminal-lyrics/`.
 pub fn cache_dir() -> Option<PathBuf> {
     directories::ProjectDirs::from("", "", "terminal-lyrics").map(|d| d.cache_dir().to_path_buf())
+}
+
+/// `$XDG_DATA_HOME/terminal-lyrics/offsets.json`, where the per-track sync
+/// nudges are kept. Data rather than cache: they are the user's own
+/// corrections, and a cache is by definition safe to delete.
+pub fn offsets_path() -> Option<PathBuf> {
+    directories::ProjectDirs::from("", "", "terminal-lyrics")
+        .map(|d| d.data_dir().join("offsets.json"))
 }

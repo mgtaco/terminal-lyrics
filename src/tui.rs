@@ -18,6 +18,7 @@ use crate::config::Config;
 use crate::lyrics::cache::Cache;
 use crate::lyrics::Net;
 use crate::lyrics::{Outcome, Source};
+use crate::offsets::Offsets;
 use crate::player::{EventRx, PlayerEvent, PlayerHandle, Track};
 use crate::render::font::{self, Font};
 use crate::render::{Screen, Theme};
@@ -62,6 +63,9 @@ struct FetchResult {
 pub struct App {
     cfg: Config,
     engine: SyncEngine,
+    /// Per-track sync nudges, reloaded on every track change and written back
+    /// on every keypress that moves one.
+    offsets: Offsets,
     state: LyricState,
     font: Font,
     theme: Theme,
@@ -71,7 +75,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(cfg: Config, now: Instant) -> Self {
+    pub fn new(cfg: Config, offsets: Offsets, now: Instant) -> Self {
         let font = font::by_name(&cfg.font).unwrap_or_else(font::block);
         let engine = SyncEngine::new(
             cfg.offset_ms,
@@ -81,12 +85,73 @@ impl App {
         Self {
             cfg,
             engine,
+            offsets,
             state: LyricState::Idle,
             font,
             theme: Theme::default(),
             notice: None,
             should_quit: false,
         }
+    }
+
+    /// Feed a player event through the sync engine, adopting the new track's
+    /// saved offset whenever the track actually changes. The caller still gets
+    /// the [`Change`] back and still has to start the lookup — but the offset
+    /// half of "a new song loaded" lives here, where it cannot be forgotten.
+    pub fn apply_player_event(&mut self, event: PlayerEvent, now: Instant) -> Change {
+        let change = self.engine.apply(event, now);
+        if matches!(change, Change::Track(_)) {
+            self.adopt_track_offset();
+        }
+        change
+    }
+
+    /// Point the clock at whichever offset belongs to the track now loaded:
+    /// its own if it has ever been nudged, the configured starting point if
+    /// not. Called on every track change, which is what stops a correction
+    /// made for one song from following you into the next.
+    pub fn adopt_track_offset(&mut self) {
+        let key = self.engine.track().map(|t| t.id.clone()).unwrap_or_default();
+        let offset = self.offsets.offset_for(&key, self.cfg.offset_ms);
+        self.engine.clock_mut().set_offset_ms(offset);
+    }
+
+    /// Shift the current track and remember the result.
+    pub fn nudge_offset(&mut self, delta_ms: i64) {
+        self.engine.clock_mut().nudge_offset_ms(delta_ms);
+        self.save_offset();
+    }
+
+    /// Put the current track back to the configured starting point and forget
+    /// it, so it is once again a track nobody has corrected.
+    pub fn reset_offset(&mut self) {
+        self.engine.clock_mut().set_offset_ms(self.cfg.offset_ms);
+        if let Some(track) = self.engine.track() {
+            let key = track.id.clone();
+            self.offsets.clear(&key);
+        }
+    }
+
+    /// Store the clock's offset against the current track — unless it equals
+    /// the default, in which case the entry is dropped rather than written.
+    /// Absence is how the file spells "never tuned", and a nudge that lands
+    /// back on the default should leave no trace behind.
+    fn save_offset(&mut self) {
+        let Some(track) = self.engine.track() else {
+            return;
+        };
+        let (key, label) = (track.id.clone(), track.label());
+        let offset = self.engine.clock().offset_ms();
+        if offset == self.cfg.offset_ms {
+            self.offsets.clear(&key);
+        } else {
+            self.offsets.set(&key, &label, offset);
+        }
+    }
+
+    /// The offset in force, for a test or a notice.
+    pub fn offset_ms(&self) -> i64 {
+        self.engine.clock().offset_ms()
     }
 
     fn note(&mut self, msg: impl Into<String>) {
@@ -106,9 +171,10 @@ pub async fn run(
     events: EventRx,
     cache: Cache,
     client: Option<Net>,
+    offsets: Offsets,
 ) -> Result<()> {
     let terminal = ratatui::try_init().context("failed to take over the terminal")?;
-    let result = run_inner(cfg, player, events, cache, client, terminal).await;
+    let result = run_inner(cfg, player, events, cache, client, offsets, terminal).await;
     ratatui::restore();
     result
 }
@@ -119,10 +185,11 @@ async fn run_inner(
     mut events: EventRx,
     cache: Cache,
     client: Option<Net>,
+    offsets: Offsets,
     mut terminal: DefaultTerminal,
 ) -> Result<()> {
     let start = Instant::now();
-    let mut app = App::new(cfg, start);
+    let mut app = App::new(cfg, offsets, start);
     let mut keys = EventStream::new();
     let mut ticker = tokio::time::interval(Duration::from_millis(app.cfg.tick_ms));
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -144,7 +211,7 @@ async fn run_inner(
             Some(event) = events.recv() => {
                 let now = Instant::now();
                 let gone = matches!(event, PlayerEvent::Gone);
-                match app.engine.apply(event, now) {
+                match app.apply_player_event(event, now) {
                     Change::Track(track) => {
                         start_lookup(&mut app, track.map(|b| *b), &cache, &client, &fetch_tx);
                     }
@@ -413,18 +480,19 @@ async fn handle_key(
             app.should_quit = true;
         }
         KeyCode::Char(',') => {
-            app.engine.clock_mut().nudge_offset_ms(-100);
-            let off = app.engine.clock().offset_ms();
-            app.note(format!("offset {off:+}ms"));
+            app.nudge_offset(-100);
+            let off = app.offset_ms();
+            app.note(format!("offset {off:+}ms  (saved for this song)"));
         }
         KeyCode::Char('.') => {
-            app.engine.clock_mut().nudge_offset_ms(100);
-            let off = app.engine.clock().offset_ms();
-            app.note(format!("offset {off:+}ms"));
+            app.nudge_offset(100);
+            let off = app.offset_ms();
+            app.note(format!("offset {off:+}ms  (saved for this song)"));
         }
         KeyCode::Char('0') => {
-            app.engine.clock_mut().set_offset_ms(0);
-            app.note("offset reset");
+            app.reset_offset();
+            let off = app.offset_ms();
+            app.note(format!("offset {off:+}ms  (back to the default)"));
         }
         KeyCode::Char('f') => {
             let next = font::next_after(app.font.name);

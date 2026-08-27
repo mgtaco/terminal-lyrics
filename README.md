@@ -57,18 +57,27 @@ line-level lyrics are shown a phrase at a time.
 |---|---|
 | `q` / `Esc` | quit |
 | `space` | play/pause the player |
-| `,` / `.` | shift lyrics 100 ms earlier / later |
-| `0` | reset the shift |
+| `,` / `.` | shift lyrics 100 ms earlier / later, saved for this song |
+| `0` | forget this song's shift and go back to the default |
 | `f` | cycle font (block → compact → mini) |
 | `w` | switch between one word at a time and whole lines |
 | `s` | cycle the highlight: never → auto → always |
 | `r` | forget the cached lyrics and look them up again |
 
+The shift belongs to the song, not to the session. A file that plays 300 ms
+late is fixed once with `,`, and the correction is written to disk against that
+track and reapplied every time it comes on again — while the next song starts
+from `offset_ms` in the config, which is what that setting now means: where a
+song starts before anyone has nudged it. `0` forgets a song's shift and puts it
+back there. `lyrics paths` prints the file and how many songs are in it, and
+`lyrics status` shows whether the song playing has a saved shift.
+
 A few flags are worth knowing. `--whole-lines` always shows the full phrase,
 `--sweep` highlights the sung part of whatever is on screen, and `--font
 compact` picks a smaller face. If several players are running, `--player
-spotify` pins the one you mean, and `--offset-ms -250` rescues a file that was
-timed badly. To work from your own lyrics rather than the network,
+spotify` pins the one you mean, and `--offset-ms -250` moves the starting point
+for every song you have not tuned by hand. To work from your own lyrics rather
+than the network,
 `--lrc-dir ~/lyrics` prefers your `Artist - Title.lrc` files, and `--no-network`
 restricts it to those and the cache.
 
@@ -79,7 +88,7 @@ lyrics status                 # player, track, position, and which source matche
 lyrics fetch --artist "Radiohead" --title "Creep" --duration 238
 lyrics fetch --artist "Kanye West" --title "Flashing Lights" \
              --spotify-id 5TRPicyLGbAF2LGBFbHGvO   # word-timed, via AMLL
-lyrics paths                  # where the config and cache live
+lyrics paths                  # where the config, cache and saved offsets live
 ```
 
 When something is not working, `status` is the place to start, since it prints
@@ -90,6 +99,12 @@ shows only that last part, the source, so that it stays out of the way of the
 lyrics.
 
 ## Configuration
+
+Per-song offsets are not settings and do not live in the config file; they are
+kept as JSON in the data directory — `~/.local/share/terminal-lyrics/offsets.json`,
+or `~/Library/Application Support/terminal-lyrics/offsets.json` on macOS. Only
+songs you have actually nudged appear in it, so it stays small enough to read
+and edit by hand, and deleting it just returns every song to the default.
 
 Settings live in `~/.config/terminal-lyrics/config.toml`, or
 `~/Library/Application Support/terminal-lyrics/config.toml` on macOS; `lyrics
