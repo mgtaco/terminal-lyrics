@@ -221,23 +221,6 @@ album, status and position — but it would arrive with no Spotify track ID, and
 no word-by-word lyrics, and nobody here can test it. There is a placeholder
 backend that says so rather than failing obscurely.
 
-## Development
-
-```bash
-cargo test                      # 142 tests, no terminal or player needed
-cargo clippy --all-targets -- -D warnings
-cargo run --example pump_dump -- 15   # dump the live player event stream
-```
-
-The pure parts — the parser, timeline, clock, config layering, layout and match
-scoring — sit behind a library target so they can be tested without a bus or a
-TTY. For the parts that cannot be pure, `src/player/fake.rs` replays a scripted
-event timeline, which lets the sync engine be driven at arbitrary "times"
-without any sleeping. The macOS backend is split the same way: everything with a
-decision in it is in `parse_probe`, so the only untested line is the one that
-spawns `osascript`, which no test may do — it would prompt for Automation access
-on a developer's machine and fail outright in CI.
-
 ## Limitations
 
 * Word timings are still not universal. Three of the four sources carry them and
