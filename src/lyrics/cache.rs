@@ -3,6 +3,14 @@
 //! The negative half matters as much as the positive one: without it, a track
 //! LRCLIB has never heard of is re-queried on every track change, every restart,
 //! forever. Misses expire after a day so newly uploaded lyrics are picked up.
+//!
+//! A line-level hit expires on the same clock, and for the same reason. Word
+//! timings are the point of the program, and a line-level answer often means
+//! only that the word-timed providers were unreachable for the minute the
+//! track happened to be played — two of the four are one person's server each.
+//! Keeping that forever would make a transient outage permanent for exactly
+//! the tracks that were playing during it. A word-timed hit is kept forever:
+//! nothing better is coming.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -88,11 +96,19 @@ impl Cache {
             return None;
         }
 
+        let age = Duration::from_secs(now_secs().saturating_sub(entry.stored_at));
+
         match entry.lrc {
             Some(text) => {
                 let lyrics = lrc::parse(&text);
                 if lyrics.is_empty() {
                     return None;
+                }
+                // Derived from the lyrics rather than stored on the entry, so
+                // this needs no new field and no cache version: entries already
+                // on disk start expiring correctly the first time they are read.
+                if !lyrics.has_word_timings() && age > MISS_TTL {
+                    return None; // may only have been the best reachable that day
                 }
                 Some(Some(Found {
                     lyrics,
@@ -101,14 +117,8 @@ impl Cache {
                     raw: text,
                 }))
             }
-            None => {
-                let age = now_secs().saturating_sub(entry.stored_at);
-                if Duration::from_secs(age) > MISS_TTL {
-                    None // expired; ask again
-                } else {
-                    Some(None)
-                }
-            }
+            None if age > MISS_TTL => None, // expired; ask again
+            None => Some(None),
         }
     }
 

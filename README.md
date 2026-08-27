@@ -151,6 +151,20 @@ LRCLIB's line-level answer to somebody's server being unreachable would be the
 worst trade available. A lookup only fails outright when every provider failed
 and none of them managed to say "not here".
 
+That order is a prediction about what each source is usually good at, and it is
+not taken on trust. Only word timings end the search: a provider that answers a
+line at a time is held as a fallback and the next one is asked anyway, so an
+Apple document that happens to be line-level cannot step over word timings
+lrcmux was holding all along. The fallback is returned once nothing better has
+turned up, and the first one found wins, which keeps the order above deciding
+between answers of equal quality.
+
+The same reasoning reaches the cache. A word-timed hit is kept indefinitely,
+since nothing better is coming for it, but a line-level hit expires after a day
+like a miss does — often it only means the two hobby-run providers were
+unreachable for the minute that track was playing, and keeping it forever would
+make a brief outage permanent for whatever you happened to be listening to.
+
 **Matching LRCLIB.** The lookup starts with an exact `/api/get` on artist,
 title, album and duration, retries without the album, falls back to a scored
 `/api/search`, and finally tries once more with decorations like
@@ -210,7 +224,7 @@ backend that says so rather than failing obscurely.
 ## Development
 
 ```bash
-cargo test                      # 135 tests, no terminal or player needed
+cargo test                      # 142 tests, no terminal or player needed
 cargo clippy --all-targets -- -D warnings
 cargo run --example pump_dump -- 15   # dump the live player event stream
 ```

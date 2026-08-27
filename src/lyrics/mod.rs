@@ -1,8 +1,9 @@
 //! Finding lyrics for a track.
 //!
 //! Order: local `--lrc-dir` file, then cache (positive *and* negative), then
-//! each network provider in turn until one answers. Everything is async and
-//! runs off the UI task, so a slow network never freezes the display.
+//! each network provider in turn until one answers with word timings.
+//! Everything is async and runs off the UI task, so a slow network never
+//! freezes the display.
 //!
 //! The providers are deliberately ordered by what they are *good at* rather
 //! than by how often they hit:
@@ -15,6 +16,10 @@
 //! * **lrcmux** is the reach: five upstreams behind one API, so it degrades
 //!   rather than dies.
 //! * **LRCLIB** last, for the line-level answer that is better than nothing.
+//!
+//! That ordering is a prediction, though, and [`first_hit`] does not trust it
+//! blindly: a provider that answers line-level is held as a fallback rather
+//! than believed, and the chain keeps going. Only word timings stop it.
 //!
 //! Which of them run, and in what order, is [`Provider`] — a config list, not
 //! a flag each, so a self-hoster can drop one by deleting a word.
@@ -276,8 +281,17 @@ impl Providers for Net {
     }
 }
 
-/// Walk the chain until one provider answers. No cache — this is what
+/// Walk the chain until one provider answers *well*. No cache — this is what
 /// `lyrics fetch` runs, and what [`lookup`] runs on a cache miss.
+///
+/// Word timings end the search; a line-level answer does not. The ordering
+/// above is by what each source is usually good at, but "usually" is doing
+/// real work there — LyricsPlus serves Apple's line-level document for a
+/// minority of tracks, and returning that would step over word timings lrcmux
+/// was holding all along. So a line-level answer is kept as a fallback and the
+/// chain carries on; it is returned only once nothing better has turned up.
+/// The first such answer wins rather than the last, which keeps the documented
+/// ordering intact among answers of equal quality.
 ///
 /// A provider that fails is logged and stepped over; losing LRCLIB's line-level
 /// answer because a hobby-run service was down would be the worst possible
@@ -291,16 +305,31 @@ pub async fn first_hit(
 ) -> Result<Option<Found>> {
     let mut answered = false;
     let mut last_error = None;
+    let mut fallback: Option<Found> = None;
 
     for &provider in order {
         match providers.fetch(provider, track).await {
-            Ok(Some(found)) => return Ok(Some(found)),
+            Ok(Some(found)) => {
+                if found.lyrics.has_word_timings() {
+                    return Ok(Some(found));
+                }
+                answered = true;
+                if fallback.is_none() {
+                    debug(&format!("{provider} answered line-level; looking for better"));
+                    fallback = Some(found);
+                }
+            }
             Ok(None) => answered = true,
             Err(e) => {
                 debug(&format!("{provider} lookup failed: {e:#}"));
                 last_error = Some(e);
             }
         }
+    }
+
+    // Nothing was word-timed. A line-level answer still beats no answer.
+    if let Some(found) = fallback {
+        return Ok(Some(found));
     }
 
     match last_error {

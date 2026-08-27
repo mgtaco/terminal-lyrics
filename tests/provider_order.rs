@@ -17,8 +17,12 @@ use terminal_lyrics::player::Track;
 
 #[derive(Clone, Copy, PartialEq)]
 enum Answer {
-    /// Has the lyrics.
+    /// Has the lyrics, word-timed.
     Hit,
+    /// Has the lyrics, but only timed a line at a time — which is a real
+    /// answer, and still the wrong one to stop on if a better source is left
+    /// to ask.
+    LineHit,
     /// Working, and does not have them.
     Miss,
     /// Down.
@@ -60,7 +64,8 @@ impl Providers for Fake {
     ) -> Pin<Box<dyn Future<Output = anyhow::Result<Option<Found>>> + Send + 'a>> {
         self.calls.lock().unwrap().push(provider);
         let result = match self.answer(provider) {
-            Answer::Hit => Ok(Some(found_from(provider))),
+            Answer::Hit => Ok(Some(found_from(provider, WORD_TIMED))),
+            Answer::LineHit => Ok(Some(found_from(provider, LINE_TIMED))),
             Answer::Miss => Ok(None),
             Answer::Boom => Err(std::io::Error::other(format!("{provider} is down")).into()),
         };
@@ -68,8 +73,10 @@ impl Providers for Fake {
     }
 }
 
-fn found_from(provider: Provider) -> Found {
-    let raw = "[00:01.000]<00:01.000>Hello<00:01.500> <00:02.000>world<00:02.500>\n";
+const WORD_TIMED: &str = "[00:01.000]<00:01.000>Hello<00:01.500> <00:02.000>world<00:02.500>\n";
+const LINE_TIMED: &str = "[00:01.000]Hello world\n";
+
+fn found_from(provider: Provider, raw: &str) -> Found {
     Found {
         lyrics: lrc::parse(raw),
         source: match provider {
@@ -194,4 +201,62 @@ async fn a_cached_answer_short_circuits_the_whole_chain() {
     assert!(again.calls().is_empty(), "the cache was consulted first");
 
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test]
+async fn a_line_level_answer_does_not_stop_the_chain() {
+    // The case this was written for, seen live: LyricsPlus serves Apple's
+    // line-level document for a minority of tracks, and lrcmux had word
+    // timings for one of them. Stopping at the first *answer* rather than the
+    // first good one threw those away, and nothing on screen said so.
+    let fake = Fake::new(&[
+        (Provider::LyricsPlus, Answer::LineHit),
+        (Provider::LrcMux, Answer::Hit),
+    ]);
+    let found = chain(&fake, &DEFAULT).await.unwrap().expect("a hit");
+    assert_eq!(found.source, Source::LrcMux { provider: "musixmatch".to_string() });
+    assert!(found.lyrics.has_word_timings());
+    assert_eq!(
+        fake.calls(),
+        vec![Provider::Amll, Provider::LyricsPlus, Provider::LrcMux],
+        "the chain carried on past the line-level answer, and stopped at the word-timed one"
+    );
+}
+
+#[tokio::test]
+async fn a_line_level_answer_is_still_returned_when_nothing_better_exists() {
+    // The fallback has to actually come back. Most tracks that come back
+    // line-level are line-level everywhere, and showing nothing would be a
+    // plain regression against the version that stopped at the first answer.
+    let fake = Fake::new(&[(Provider::LyricsPlus, Answer::LineHit)]);
+    let found = chain(&fake, &DEFAULT).await.unwrap().expect("the fallback");
+    assert_eq!(found.source, Source::LyricsPlus);
+    assert!(!found.lyrics.has_word_timings());
+    assert_eq!(fake.calls(), DEFAULT.to_vec(), "everyone was asked before settling");
+}
+
+#[tokio::test]
+async fn the_first_line_level_answer_wins_over_a_later_one() {
+    // Among answers of equal quality the documented order still decides, so
+    // the fallback is kept rather than overwritten.
+    let fake = Fake::new(&[
+        (Provider::LyricsPlus, Answer::LineHit),
+        (Provider::LrcMux, Answer::LineHit),
+        (Provider::LrcLib, Answer::LineHit),
+    ]);
+    let found = chain(&fake, &DEFAULT).await.unwrap().expect("the fallback");
+    assert_eq!(found.source, Source::LyricsPlus);
+}
+
+#[tokio::test]
+async fn a_line_level_answer_beside_a_broken_provider_is_not_an_error() {
+    // The fallback is a real answer, so it outranks the recorded failure —
+    // otherwise an outage would hide lyrics that were successfully fetched.
+    let fake = Fake::new(&[
+        (Provider::LyricsPlus, Answer::Boom),
+        (Provider::LrcMux, Answer::Boom),
+        (Provider::LrcLib, Answer::LineHit),
+    ]);
+    let found = chain(&fake, &DEFAULT).await.unwrap().expect("the fallback");
+    assert_eq!(found.source, Source::LrcLib { id: 1 });
 }
