@@ -232,12 +232,28 @@ fn not_authorised(app: &str) -> anyhow::Error {
     )
 }
 
+/// Build an `osascript` invocation for `script`.
+///
+/// The `process_group` call is the whole reason this helper exists. A child
+/// inherits its parent's process group, which — since the TUI is the terminal's
+/// foreground job — makes every probe briefly the foreground job too. Terminal
+/// and iTerm both title their window after that job, so at one subprocess per
+/// poll the title flickers between "lyrics" and "osascript" for as long as the
+/// program runs. Its own group keeps it out of that lookup entirely.
+///
+/// Nothing is lost by detaching: `output()` gives the child a null stdin and
+/// pipes for the rest, so it neither reads nor writes the terminal, and a probe
+/// short enough to finish inside [`PROBE_TIMEOUT`] does not need the terminal's
+/// Ctrl-C — which raw mode has switched off anyway.
+fn osascript(script: &str) -> tokio::process::Command {
+    let mut cmd = tokio::process::Command::new("osascript");
+    cmd.arg("-e").arg(script).process_group(0);
+    cmd
+}
+
 async fn run_probe() -> Result<Vec<Probe>> {
     let script = probe_script();
-    let run = tokio::process::Command::new("osascript")
-        .arg("-e")
-        .arg(&script)
-        .output();
+    let run = osascript(&script).output();
 
     let output = tokio::time::timeout(PROBE_TIMEOUT, run)
         .await
@@ -340,9 +356,7 @@ impl PlayerHandle {
 
     pub async fn play_pause(&self) -> Result<()> {
         let script = format!("tell application id \"{}\" to playpause", self.app.bundle);
-        let output = tokio::process::Command::new("osascript")
-            .arg("-e")
-            .arg(&script)
+        let output = osascript(&script)
             .output()
             .await
             .context("failed to run osascript")?;
