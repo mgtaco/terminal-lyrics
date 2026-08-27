@@ -31,6 +31,7 @@ lrc_dir = "/file/lrc"
 network = false
 sweep = "always"
 word_by_word = false
+overlapping_voices = false
 tick_ms = 77
 resync_threshold_ms = 333
 providers = ["lrcmux", "lrclib"]
@@ -47,6 +48,7 @@ fn defaults_apply_with_no_file_and_no_flags() {
     assert!(cfg.network);
     assert_eq!(cfg.sweep, Sweep::Never, "the highlight is opt-in");
     assert!(cfg.word_by_word, "word-timed lyrics show one word at a time");
+    assert!(cfg.overlapping_voices, "two voices at once are stacked, not hidden");
     assert_eq!(
         cfg.providers,
         Provider::DEFAULT_ORDER.to_vec(),
@@ -65,6 +67,7 @@ fn file_overrides_every_default() {
     assert!(!cfg.network);
     assert_eq!(cfg.sweep, Sweep::Always);
     assert!(!cfg.word_by_word);
+    assert!(!cfg.overlapping_voices);
     assert_eq!(cfg.tick_ms, 77);
     assert_eq!(cfg.resync_threshold_ms, 333);
     assert_eq!(cfg.providers, vec![Provider::LrcMux, Provider::LrcLib]);
@@ -75,6 +78,7 @@ fn file_overrides_every_default() {
     assert_ne!(cfg.tick_ms, d.tick_ms);
     assert_ne!(cfg.sweep, d.sweep);
     assert_ne!(cfg.word_by_word, d.word_by_word);
+    assert_ne!(cfg.overlapping_voices, d.overlapping_voices);
     assert_ne!(cfg.network, d.network);
     assert_ne!(cfg.providers, d.providers);
     assert_ne!(cfg.lyricsplus_url, d.lyricsplus_url);
@@ -201,6 +205,17 @@ fn word_by_word_flags_override_the_file() {
     // Last flag wins.
     assert!(!resolve("", &["--word-by-word", "--whole-lines"]).word_by_word);
     assert!(resolve("", &["--whole-lines", "--word-by-word"]).word_by_word);
+}
+
+#[test]
+fn overlapping_voice_flags_override_the_file() {
+    let on = |c: terminal_lyrics::config::Config| c.overlapping_voices;
+    assert!(on(resolve("overlapping_voices = false", &["--overlapping-voices"])));
+    assert!(!on(resolve("overlapping_voices = true", &["--single-voice"])));
+    assert!(!on(resolve("overlapping_voices = false", &[])));
+    // Last flag wins.
+    assert!(!on(resolve("", &["--overlapping-voices", "--single-voice"])));
+    assert!(on(resolve("", &["--single-voice", "--overlapping-voices"])));
 }
 
 #[test]

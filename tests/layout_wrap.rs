@@ -2,7 +2,7 @@
 //! ever dropped, however narrow the terminal gets.
 
 use terminal_lyrics::render::layout::{Layout, layout, layout_fitting};
-use terminal_lyrics::render::{LINE_GAP, Screen, Theme, font, render};
+use terminal_lyrics::render::{LINE_GAP, Screen, SecondVoice, Theme, font, render};
 
 /// Every source character that is not whitespace must survive layout.
 fn assert_no_loss(text: &str, l: &Layout) {
@@ -120,6 +120,7 @@ fn rendering_fills_exactly_the_area_it_was_given() {
             text: "HELLO",
             highlight: 0,
             reveal: 5,
+            second: None,
         },
         &f,
         80,
@@ -146,6 +147,7 @@ fn the_highlight_splits_the_line_at_the_right_character() {
             text: "abcdef",
             highlight: 3,
             reveal: 6,
+            second: None,
         },
         &f,
         20,
@@ -174,6 +176,7 @@ fn a_blank_lyric_line_renders_nothing() {
             text: "   ",
             highlight: 0,
             reveal: 3,
+            second: None,
         },
         &f,
         80,
@@ -193,6 +196,7 @@ fn a_one_column_terminal_does_not_panic() {
             text: "HELLO WORLD",
             highlight: 2,
             reveal: 11,
+            second: None,
         },
         &f,
         1,
@@ -218,6 +222,7 @@ fn a_partly_revealed_word_holds_the_place_of_the_whole_one() {
             text: "believe",
             highlight: 0,
             reveal: 7,
+            second: None,
         },
         &f,
         40,
@@ -229,6 +234,7 @@ fn a_partly_revealed_word_holds_the_place_of_the_whole_one() {
             text: "believe",
             highlight: 0,
             reveal: 2,
+            second: None,
         },
         &f,
         40,
@@ -252,4 +258,204 @@ fn a_partly_revealed_word_holds_the_place_of_the_whole_one() {
     }
     assert!(inked_part > 0, "the sung syllable must be drawn");
     assert!(inked_part < inked_whole, "the rest must be held back");
+}
+
+/// The rows a rendered screen actually inked, as `(row index, colours used)`.
+fn inked(text: &ratatui::text::Text<'_>) -> Vec<(usize, Vec<ratatui::style::Color>)> {
+    text.lines
+        .iter()
+        .enumerate()
+        .filter(|(_, l)| l.spans.iter().any(|s| s.content.trim() != ""))
+        .map(|(i, l)| {
+            let mut colours: Vec<_> = l
+                .spans
+                .iter()
+                .filter(|s| s.content.trim() != "")
+                .filter_map(|s| s.style.fg)
+                .collect();
+            colours.dedup();
+            (i, colours)
+        })
+        .collect()
+}
+
+fn lyric<'a>(text: &'a str, second: Option<SecondVoice<'a>>) -> Screen<'a> {
+    Screen::Lyric {
+        text,
+        highlight: 0,
+        reveal: text.chars().count(),
+        second,
+    }
+}
+
+#[test]
+fn the_second_voice_is_drawn_above_the_main_line() {
+    let f = font::block();
+    let out = render(
+        &lyric(
+            "LOVE",
+            Some(SecondVoice {
+                text: "OOH",
+                background: true,
+            }),
+        ),
+        &f,
+        80,
+        24,
+        Theme::default(),
+    );
+    let rows = inked(&out);
+    let first_dim = rows
+        .iter()
+        .position(|(_, c)| c.contains(&Theme::default().dim))
+        .expect("the backing vocal is on screen");
+    let first_lit = rows
+        .iter()
+        .position(|(_, c)| c.contains(&Theme::default().unsung))
+        .expect("the line is on screen");
+    assert!(first_dim < first_lit, "the second voice sits above the line");
+}
+
+#[test]
+fn a_background_voice_is_dimmed_and_a_size_smaller() {
+    let theme = Theme::default();
+    let out = render(
+        &lyric(
+            "LOVE",
+            Some(SecondVoice {
+                text: "OOH",
+                background: true,
+            }),
+        ),
+        &font::block(),
+        80,
+        24,
+        theme,
+    );
+    let rows = inked(&out);
+    let dim = rows.iter().filter(|(_, c)| c.contains(&theme.dim)).count();
+    let lit = rows.iter().filter(|(_, c)| c.contains(&theme.unsung)).count();
+    assert_eq!(lit, 5, "the line is block art");
+    assert_eq!(dim, 3, "the backing vocal is a size down, in compact");
+}
+
+#[test]
+fn a_duet_partner_is_full_size_and_lit() {
+    let theme = Theme::default();
+    let out = render(
+        &lyric(
+            "LOVE",
+            Some(SecondVoice {
+                text: "NEED",
+                background: false,
+            }),
+        ),
+        &font::block(),
+        80,
+        24,
+        theme,
+    );
+    let rows = inked(&out);
+    assert!(
+        rows.iter().all(|(_, c)| !c.contains(&theme.dim)),
+        "the other half of a duet is a voice, not a shadow"
+    );
+    assert_eq!(
+        rows.len(),
+        10,
+        "both voices are block art: five rows each, {rows:?}"
+    );
+}
+
+#[test]
+fn both_voices_step_down_together_before_either_is_dropped() {
+    let theme = Theme::default();
+    // Block (5) + gap (1) + compact (3) needs nine rows. In eight, both step
+    // down rather than the second voice being dropped.
+    let out = render(
+        &lyric(
+            "LOVE",
+            Some(SecondVoice {
+                text: "OOH",
+                background: true,
+            }),
+        ),
+        &font::block(),
+        80,
+        8,
+        theme,
+    );
+    let rows = inked(&out);
+    assert!(
+        rows.iter().any(|(_, c)| c.contains(&theme.dim)),
+        "the second voice is still there"
+    );
+    let lit = rows.iter().filter(|(_, c)| c.contains(&theme.unsung)).count();
+    assert!(lit < 5, "the line stepped down to make room, got {lit} rows");
+}
+
+#[test]
+fn the_main_line_keeps_its_solo_size_when_the_second_voice_is_dropped() {
+    // The one thing that must never happen: shrinking the lyric to make room
+    // for a voice that then does not fit anyway, leaving the reader with a
+    // smaller line and nothing to show for it.
+    let theme = Theme::default();
+    let alone = render(&lyric("LOVE", None), &font::block(), 80, 5, theme);
+    let paired = render(
+        &lyric(
+            "LOVE",
+            Some(SecondVoice {
+                // Long enough to wrap past five rows even in the smallest
+                // font, so stepping down cannot rescue it and it has to go.
+                text: "A BACKING VOCAL SO LONG THAT IT WRAPS PAST THE WHOLE \
+                       BUDGET EVEN AS PLAIN TEXT AND THEREFORE CANNOT BE DRAWN \
+                       ALONGSIDE ANYTHING AT ALL NO MATTER HOW FAR EITHER OF \
+                       THE TWO VOICES STEPS DOWN IN SIZE FIRST",
+                background: true,
+            }),
+        ),
+        &font::block(),
+        80,
+        5,
+        theme,
+    );
+    assert_eq!(
+        inked(&alone).len(),
+        inked(&paired).len(),
+        "the line is drawn at the size it gets on its own"
+    );
+    assert!(
+        inked(&paired).iter().all(|(_, c)| !c.contains(&theme.dim)),
+        "and the voice that would not fit is simply not drawn"
+    );
+}
+
+#[test]
+fn a_blank_main_line_still_draws_its_second_voice() {
+    // A line that is nothing but a backing vocal is rare but real; returning an
+    // empty screen for it would blank the display mid-song.
+    let theme = Theme::default();
+    let out = render(
+        &lyric(
+            "",
+            Some(SecondVoice {
+                text: "OOH",
+                background: true,
+            }),
+        ),
+        &font::block(),
+        80,
+        24,
+        theme,
+    );
+    assert!(!inked(&out).is_empty(), "something is on screen");
+}
+
+#[test]
+fn the_font_helper_steps_down_monotonically() {
+    // `next_after` is the `f` key's cycle and wraps; stepping down has to stop.
+    assert_eq!(font::smaller_than("block").map(|f| f.name), Some("compact"));
+    assert_eq!(font::smaller_than("compact").map(|f| f.name), Some("mini"));
+    assert_eq!(font::smaller_than("mini").map(|f| f.name), None);
+    assert_eq!(font::next_after("mini"), "block");
 }

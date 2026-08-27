@@ -15,6 +15,10 @@ use self::layout::Layout;
 /// Blank rows between wrapped lines of block art.
 pub const LINE_GAP: usize = 1;
 
+/// Blank rows between the two voices. Any tighter and they read as one phrase
+/// that happened to wrap, rather than as two people singing.
+pub const VOICE_GAP: usize = 1;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Theme {
     pub sung: Color,
@@ -34,6 +38,15 @@ impl Default for Theme {
     }
 }
 
+/// A second voice on screen alongside the line being read.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SecondVoice<'a> {
+    pub text: &'a str,
+    /// A background vocal: dimmed, and drawn a size smaller than the line it
+    /// sits over. The other half of a duet is neither — it is a co-equal voice.
+    pub background: bool,
+}
+
 /// What the screen should show right now.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Screen<'a> {
@@ -47,6 +60,9 @@ pub enum Screen<'a> {
         text: &'a str,
         highlight: usize,
         reveal: usize,
+        /// Drawn above `text`, and always drawn whole: the sweep and the
+        /// word-by-word split belong to the line being read.
+        second: Option<SecondVoice<'a>>,
     },
     /// Track known, lyrics being looked up.
     Searching { label: &'a str },
@@ -66,12 +82,45 @@ pub fn render(screen: &Screen<'_>, font: &Font, width: u16, height: u16, theme: 
             text,
             highlight,
             reveal,
+            second,
         } => {
-            if text.trim().is_empty() {
+            // A line that is nothing but a background vocal has no main text,
+            // and must still draw the voice that is actually singing.
+            if text.trim().is_empty() && second.is_none_or(|s| s.text.trim().is_empty()) {
                 return Text::default();
             }
-            let (layout, used) = layout::layout_fitting(text, font, width, height, LINE_GAP);
-            block_text(&layout, &used, *highlight, *reveal, width, height, theme)
+            let (main, second) = fit_voices(text, *second, font, width, height);
+            let mut rows: Vec<Line<'static>> = Vec::new();
+            if let Some(s) = &second {
+                // Grey for a background vocal; the same colour the main line's
+                // unsung characters use for a duet partner, so the two read as
+                // equals rather than as a line and its shadow.
+                let colour = match s.background {
+                    true => theme.dim,
+                    false => theme.unsung,
+                };
+                rows.extend(block_rows(
+                    &s.fitted.layout,
+                    &s.fitted.font,
+                    RowStyle::Flat(colour),
+                    width,
+                    theme,
+                ));
+                if !main.layout.is_empty() {
+                    rows.extend(std::iter::repeat_n(Line::default(), VOICE_GAP));
+                }
+            }
+            rows.extend(block_rows(
+                &main.layout,
+                &main.font,
+                RowStyle::Sweep {
+                    highlight: *highlight,
+                    reveal: *reveal,
+                },
+                width,
+                theme,
+            ));
+            vertically_centre(rows, height)
         }
         Screen::Searching { label } => status_text(label, "searching for lyrics", width, height, theme),
         Screen::NoLyrics { label } => status_text(label, "no lyrics found", width, height, theme),
@@ -79,15 +128,87 @@ pub fn render(screen: &Screen<'_>, font: &Font, width: u16, height: u16, theme: 
     }
 }
 
-fn block_text(
-    layout: &Layout,
-    font: &Font,
-    highlight: usize,
-    reveal: usize,
+/// How a run of glyph art is coloured.
+enum RowStyle {
+    /// The line being read: swept characters bold in `sung`, the rest in
+    /// `unsung`, and only the first `reveal` inked at all.
+    Sweep { highlight: usize, reveal: usize },
+    /// A second voice: one colour, all of it inked, never bold.
+    Flat(Color),
+}
+
+/// One voice laid out at the size it will be drawn.
+struct Fitted {
+    layout: Layout,
+    font: Font,
+}
+
+/// A fitted second voice, and whether it is a background vocal.
+struct FittedSecond {
+    fitted: Fitted,
+    background: bool,
+}
+
+/// Fit the line, and the voice over it, into the space there is.
+///
+/// The order matters. The line's own size is settled first, against the whole
+/// budget, and is the floor: the pair may step down together to make room, but
+/// if even the smallest font cannot hold both, the second voice is dropped and
+/// the line goes back to the size it would have had alone. Shrinking the lyric
+/// for something that then gets dropped would be the worst of both.
+fn fit_voices(
+    main: &str,
+    second: Option<SecondVoice<'_>>,
+    preferred: &Font,
     width: usize,
     height: usize,
+) -> (Fitted, Option<FittedSecond>) {
+    let (layout, font) = layout::layout_fitting(main, preferred, width, height, LINE_GAP);
+    let solo = Fitted { layout, font };
+
+    let Some(second) = second.filter(|s| !s.text.trim().is_empty()) else {
+        return (solo, None);
+    };
+
+    // Never larger than the line manages on its own: a font that cannot hold
+    // one voice is not going to hold two.
+    for font in layout::fallback_chain(&solo.font) {
+        let second_font = match second.background {
+            true => font::smaller_than(font.name).unwrap_or_else(|| font.clone()),
+            false => font.clone(),
+        };
+        let lm = layout::layout(main, &font, width);
+        let ls = layout::layout(second.text, &second_font, width);
+        let mut rows = ls.rows(LINE_GAP);
+        if !lm.is_empty() {
+            rows += VOICE_GAP + lm.rows(LINE_GAP);
+        }
+        if rows <= height.max(1) {
+            return (
+                Fitted { layout: lm, font },
+                Some(FittedSecond {
+                    fitted: Fitted {
+                        layout: ls,
+                        font: second_font,
+                    },
+                    background: second.background,
+                }),
+            );
+        }
+    }
+
+    (solo, None)
+}
+
+/// Rows of glyph art for one voice, centred horizontally but not vertically —
+/// the two voices are centred together, as one block.
+fn block_rows(
+    layout: &Layout,
+    font: &Font,
+    style: RowStyle,
+    width: usize,
     theme: Theme,
-) -> Text<'static> {
+) -> Vec<Line<'static>> {
     let mut rows: Vec<Line<'static>> = Vec::new();
 
     for (i, vline) in layout.lines.iter().enumerate() {
@@ -107,15 +228,21 @@ fn block_text(
                     spans.push(Span::raw(" ".repeat(font.tracking())));
                 }
                 let art = cell.rows.get(row).cloned().unwrap_or_default();
+                let (reached, style) = match style {
+                    RowStyle::Sweep { highlight, reveal } => (
+                        cell.src < reveal,
+                        if cell.src < highlight {
+                            Style::default().fg(theme.sung).add_modifier(Modifier::BOLD)
+                        } else {
+                            Style::default().fg(theme.unsung)
+                        },
+                    ),
+                    RowStyle::Flat(colour) => (true, Style::default().fg(colour)),
+                };
                 // Not reached yet: hold the space, draw nothing in it.
-                let art = match cell.src < reveal {
+                let art = match reached {
                     true => pad_to(&art, cell.width),
                     false => " ".repeat(cell.width),
-                };
-                let style = if cell.src < highlight {
-                    Style::default().fg(theme.sung).add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(theme.unsung)
                 };
                 spans.push(Span::styled(art, style));
             }
@@ -123,7 +250,7 @@ fn block_text(
         }
     }
 
-    vertically_centre(rows, height)
+    rows
 }
 
 /// Glyph rows can be shorter than the glyph's nominal width (trailing spaces

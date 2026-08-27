@@ -195,3 +195,52 @@ fn the_highlight_keeps_up_with_a_word_that_is_still_growing() {
         "the highlight must be past \"be\" and inside the word, got {relative}"
     );
 }
+
+/// A line with a backing vocal that comes in partway through it and stops
+/// before it does — the usual shape.
+const WITH_SECOND_VOICE: &str = "\
+[00:10.00][end:00:20.00]first line
+[00:12.00][bg:00:10.00][end:00:16.00](ooh ooh)
+[00:20.00]second line
+";
+
+#[test]
+fn a_second_voice_is_offered_only_while_it_is_singing() {
+    let t = tl(WITH_SECOND_VOICE);
+    let Position::Line { index } = t.locate(11.0) else {
+        panic!("the first line is up")
+    };
+    assert!(t.secondary(index, 11.0).is_none(), "it has not come in yet");
+    assert_eq!(t.secondary(index, 13.0).map(|s| s.text.as_str()), Some("(ooh ooh)"));
+    assert!(t.secondary(index, 17.0).is_none(), "and it has stopped");
+}
+
+#[test]
+fn a_very_short_background_phrase_is_held_long_enough_to_read() {
+    // Apple times these to the syllable, so "(ooh)" can be a fifth of a second.
+    // Drawn and pulled that fast it reads as a flicker rather than a voice.
+    let t = tl(
+        "[00:10.00][end:00:20.00]a line\n\
+         [00:12.00][bg:00:10.00][end:00:12.20](ooh)\n\
+         [00:20.00]the next line\n",
+    );
+    let Position::Line { index } = t.locate(12.5) else {
+        panic!("the line is up")
+    };
+    assert!(t.secondary(index, 12.5).is_some(), "still up after its own end");
+    assert!(t.secondary(index, 13.5).is_none(), "but not indefinitely");
+}
+
+#[test]
+fn the_second_voice_never_gets_the_sweep_or_an_active_word() {
+    // The sweep belongs to the line being read. The second voice carries no
+    // words at all, so there is nothing for either to land on.
+    let t = tl(WITH_SECOND_VOICE);
+    let Position::Line { index } = t.locate(13.0) else {
+        panic!("the first line is up")
+    };
+    let line = t.line(index).expect("a line");
+    assert_eq!(line.text, "first line");
+    assert_eq!(t.highlight_chars(index, 13.0), t.highlight_chars(index, 13.0));
+    assert!(t.active_word(index, 13.0).is_none(), "this line has no word tags");
+}

@@ -98,3 +98,50 @@ fn expiry_is_decided_by_the_lyrics_not_by_a_stored_flag() {
     assert!(cache.get(KEY).is_some(), "the same age, kept, because it is word-timed");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A word-timed line with a backing vocal over it, as the TTML converter writes
+/// it: the markers are the only record of the second voice.
+const WITH_BACKGROUND: &str = "\
+[00:01.000][end:00:02.500]<00:01.000>Hello<00:01.500> <00:02.000>world<00:02.500>
+[00:01.200][bg:00:01.000][end:00:02.400](ooh ooh)
+";
+
+/// A line-level lyric whose only word timings belong to its backing vocal.
+const BACKGROUND_ONLY_TIMINGS: &str = "\
+[00:01.000]Hello world
+[00:01.200][bg:00:01.000][end:00:02.400]<00:01.200>(ooh)<00:02.400>
+";
+
+#[test]
+fn background_vocals_survive_the_cache_round_trip() {
+    // Everything reaches the screen through here: the cache stores the LRC text
+    // and parses it again on the way out. A second voice that is not written
+    // into that text is right on the first play and gone on every one after,
+    // which is the worst way for this to break.
+    let dir = scratch("background-round-trip");
+    let cache = Cache::new(Some(dir.clone()));
+    cache.put_hit(KEY, "Radiohead - Creep", WITH_BACKGROUND, None, true);
+
+    let got = cache.get(KEY).expect("still cached").expect("a hit");
+    let second = &got.lyrics.lines[0].secondary[0];
+    assert_eq!(second.text, "(ooh ooh)");
+    assert!(second.background);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_document_whose_only_word_tags_are_background_expires_like_a_line_level_one() {
+    // Word-timed entries are kept forever because nothing better is coming for
+    // them. A backing vocal is not the line being read, so it must not be able
+    // to pin a line-level answer in the cache for good.
+    let dir = scratch("background-only-timings");
+    let cache = Cache::new(Some(dir.clone()));
+    cache.put_hit(KEY, "Radiohead - Creep", BACKGROUND_ONLY_TIMINGS, None, true);
+
+    let got = cache.get(KEY).expect("cached").expect("a hit");
+    assert!(!got.lyrics.lines[0].secondary.is_empty(), "the voice is there");
+
+    age_by_days(&dir, 2);
+    assert!(cache.get(KEY).is_none(), "and it still expires");
+    let _ = std::fs::remove_dir_all(&dir);
+}

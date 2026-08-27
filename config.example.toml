@@ -46,6 +46,12 @@ lrcmux_url = "https://api.lrcmux.dev"
 # Lines without word timings are always shown whole.
 word_by_word = true
 
+# When two voices are singing at once, show both, stacked. A background vocal
+# is drawn above the line in grey and a size smaller; the other half of a duet
+# is drawn full size, because it is a voice and not an echo. Set false to show
+# one line at a time, whichever came in most recently. The `v` key toggles it.
+overlapping_voices = true
+
 # When to highlight the sung part of what is on screen.
 #   "never"  — no highlight (default)
 #   "auto"   — only when the lyrics carry real per-word timestamps

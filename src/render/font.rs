@@ -92,6 +92,17 @@ pub fn next_after(name: &str) -> &'static str {
     NAMES[(idx + 1) % NAMES.len()]
 }
 
+/// The next font down, or `None` at the smallest.
+///
+/// Not the same thing as [`next_after`], which is the `f` key's cycle and wraps
+/// from `mini` back round to `block`. Stepping down has to terminate: it is
+/// what draws a second voice a size smaller than the line it sits over, and
+/// what the two-voice fit walks when the terminal is short.
+pub fn smaller_than(name: &str) -> Option<Font> {
+    let idx = NAMES.iter().position(|n| *n == name)?;
+    NAMES.get(idx + 1).and_then(|n| by_name(n))
+}
+
 macro_rules! font {
     ($name:literal, $height:literal, { $($ch:literal => [$($row:literal),* $(,)?]),* $(,)? }) => {
         Font::build($name, $height, &[ $( ($ch, &[$($row),*]) ),* ])

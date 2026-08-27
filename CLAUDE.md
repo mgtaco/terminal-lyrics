@@ -17,7 +17,12 @@ provider ordering and matching in full.
 ## Design rules worth keeping
 
 - Only word timings end the provider search; a line-level answer is held as a
-  fallback and the next provider is still asked.
+  fallback and the next provider is still asked. A background vocal's word tags
+  do not count — they must not pin a line-level answer in the cache for good.
+- A second voice is drawn whole and never swept; the sweep belongs to the line
+  being read. `Secondary` carries no `words`, so that is structural.
+- Overlap only means a duet past `MIN_DUET_OVERLAP`; below it, one line's tail
+  is running into the next, which is most overlap in the wild.
 - Word-timed cache entries are kept indefinitely; line-level ones expire after a
   day, same as a miss.
 - Player picking stays platform-neutral: playing beats has-a-track beats
@@ -34,7 +39,7 @@ provider ordering and matching in full.
 ## Working on it
 
 ```bash
-cargo test                              # 151 tests, no terminal or player needed
+cargo test                              # 182 tests, no terminal or player needed
 cargo clippy --all-targets -- -D warnings
 cargo run --example pump_dump -- 15     # dump the live player event stream
 lyrics status                           # what it sees: player, track, source

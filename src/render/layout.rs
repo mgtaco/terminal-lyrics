@@ -173,7 +173,7 @@ pub fn layout_fitting(
 }
 
 /// Preferred font first, then progressively smaller ones.
-fn fallback_chain(preferred: &Font) -> Vec<Font> {
+pub(crate) fn fallback_chain(preferred: &Font) -> Vec<Font> {
     let mut out = vec![preferred.clone()];
     for name in ["compact", "mini"] {
         if name != preferred.name

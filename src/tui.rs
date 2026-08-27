@@ -21,7 +21,7 @@ use crate::lyrics::{Outcome, Source};
 use crate::offsets::Offsets;
 use crate::player::{EventRx, PlayerEvent, PlayerHandle, Track};
 use crate::render::font::{self, Font};
-use crate::render::{Screen, Theme};
+use crate::render::{Screen, SecondVoice, Theme};
 use crate::sync::{Change, SyncEngine};
 use crate::timeline::{Position, Timeline};
 
@@ -278,6 +278,8 @@ fn draw(terminal: &mut DefaultTerminal, app: &App) -> Result<()> {
 
         // Held so the borrow lives as long as `screen`.
         let mut line_text = String::new();
+        let mut second_text = String::new();
+        let mut second_background = false;
         let mut highlight = 0usize;
         let mut reveal = 0usize;
 
@@ -298,11 +300,29 @@ fn draw(terminal: &mut DefaultTerminal, app: &App) -> Result<()> {
                             0
                         };
 
+                        // A second voice singing over this line, if the user
+                        // wants both on screen. The parser always works them
+                        // out; this only decides whether we ask.
+                        if app.cfg.overlapping_voices
+                            && let Some(s) = timeline.secondary(index, pos)
+                            && !s.text.trim().is_empty()
+                        {
+                            second_text = s.text.clone();
+                            second_background = s.background;
+                        }
+                        let duet = !second_text.is_empty() && !second_background;
+
                         // With real word timings, show the word being sung on
                         // its own. Decided per line, not per file: a source can
                         // carry tags on some lines and not others, and those
                         // lines must still appear in full rather than vanish.
-                        let split = app.cfg.word_by_word && !line.words.is_empty();
+                        //
+                        // Not against a duet partner, though: two whole phrases
+                        // are being sung, and one word of one of them stacked
+                        // under all of the other reads as a mistake. A
+                        // background vocal is different — it is texture, and
+                        // sits happily over a single word.
+                        let split = app.cfg.word_by_word && !line.words.is_empty() && !duet;
 
                         match split {
                             // The whole word is handed to the renderer even when
@@ -338,6 +358,10 @@ fn draw(terminal: &mut DefaultTerminal, app: &App) -> Result<()> {
                         text: &line_text,
                         highlight,
                         reveal,
+                        second: (!second_text.is_empty()).then_some(SecondVoice {
+                            text: &second_text,
+                            background: second_background,
+                        }),
                     }
                 }
                 // During the intro and the outro, show whose song it is.
@@ -518,6 +542,14 @@ async fn handle_key(
                 "one word at a time"
             } else {
                 "whole lines"
+            });
+        }
+        KeyCode::Char('v') => {
+            app.cfg.overlapping_voices = !app.cfg.overlapping_voices;
+            app.note(if app.cfg.overlapping_voices {
+                "both voices"
+            } else {
+                "one voice"
             });
         }
         KeyCode::Char('r') => {

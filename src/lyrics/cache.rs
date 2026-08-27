@@ -29,7 +29,12 @@ const MISS_TTL: Duration = Duration::from_secs(24 * 60 * 60);
 /// returns that before a provider is ever consulted, so without this the two
 /// new word-timed sources would be invisible across the user's entire existing
 /// library — the feature would look like it had not shipped.
-const CACHE_VERSION: u32 = 3;
+///
+/// Bumped to 4 for background vocals and the `[end:]` marker. Word-timed
+/// entries never expire, so every AMLL and Apple track already in the cache
+/// holds the shape from before a second voice could be written down, and would
+/// keep serving lyrics with the backing vocals stripped out of them forever.
+const CACHE_VERSION: u32 = 4;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Entry {

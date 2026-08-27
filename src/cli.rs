@@ -74,6 +74,16 @@ pub struct Cli {
     #[arg(long, overrides_with = "word_by_word")]
     pub whole_lines: bool,
 
+    /// Stack a second voice above the line when two are singing at once — a
+    /// background vocal, or the other half of a duet. This is the default;
+    /// `--single-voice` turns it off.
+    #[arg(long, overrides_with = "single_voice")]
+    pub overlapping_voices: bool,
+
+    /// Never stack; show one lyric line at a time.
+    #[arg(long, overrides_with = "overlapping_voices")]
+    pub single_voice: bool,
+
     #[command(subcommand)]
     pub command: Option<Command>,
 }
@@ -113,6 +123,16 @@ impl Cli {
     /// to the config file and then the default.
     pub fn word_by_word_choice(&self) -> Option<bool> {
         match (self.word_by_word, self.whole_lines) {
+            (true, false) => Some(true),
+            (false, true) => Some(false),
+            _ => None,
+        }
+    }
+
+    /// `--overlapping-voices` / `--single-voice` as an override, or `None` to
+    /// defer to the config file and then the default.
+    pub fn overlapping_voices_choice(&self) -> Option<bool> {
+        match (self.overlapping_voices, self.single_voice) {
             (true, false) => Some(true),
             (false, true) => Some(false),
             _ => None,

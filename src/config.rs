@@ -72,6 +72,10 @@ pub struct Config {
     /// Show one word at a time when the lyrics carry real word timings.
     /// Ignored for line-level sources, which have nothing to split on.
     pub word_by_word: bool,
+    /// Stack a second voice above the line when two are singing at once: a
+    /// background vocal, or the other half of a duet. Off shows one line at a
+    /// time, whichever came in most recently.
+    pub overlapping_voices: bool,
     /// Redraw interval. Only the sweep highlight moves between player events.
     pub tick_ms: u64,
     /// How far the predicted position may drift from the player's own
@@ -97,6 +101,7 @@ impl Default for Config {
             network: true,
             sweep: Sweep::Never,
             word_by_word: true,
+            overlapping_voices: true,
             tick_ms: 30,
             resync_threshold_ms: 250,
             providers: Provider::DEFAULT_ORDER.to_vec(),
@@ -117,6 +122,7 @@ pub struct ConfigFile {
     pub network: Option<bool>,
     pub sweep: Option<Sweep>,
     pub word_by_word: Option<bool>,
+    pub overlapping_voices: Option<bool>,
     pub tick_ms: Option<u64>,
     pub resync_threshold_ms: Option<u64>,
     /// An unknown name here is an error, not a silent skip: it would otherwise
@@ -165,6 +171,10 @@ impl Config {
                 .word_by_word_choice()
                 .or(file.word_by_word)
                 .unwrap_or(d.word_by_word),
+            overlapping_voices: cli
+                .overlapping_voices_choice()
+                .or(file.overlapping_voices)
+                .unwrap_or(d.overlapping_voices),
             tick_ms: file.tick_ms.unwrap_or(d.tick_ms).clamp(10, 1000),
             resync_threshold_ms: file
                 .resync_threshold_ms

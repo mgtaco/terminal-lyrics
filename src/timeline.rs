@@ -85,6 +85,25 @@ impl Timeline {
         Position::Line { index: idx }
     }
 
+    /// The second voice over line `index` at `pos`, if one is singing.
+    ///
+    /// Windowed rather than simply tied to the line, because a second voice
+    /// rarely lines up with it: a background phrase usually comes in partway
+    /// through and stops before the line does, and a duet partner's phrase ends
+    /// while the line that took over runs on. Where two would be up at once the
+    /// most recent wins, the same rule [`Timeline::locate`] uses for lines.
+    ///
+    /// It can never outlive its host: `locate` moves on at `line.end`.
+    pub fn secondary(&self, index: usize, pos: f64) -> Option<&crate::lrc::Secondary> {
+        self.lyrics
+            .lines
+            .get(index)?
+            .secondary
+            .iter()
+            .rev()
+            .find(|s| pos >= s.start && pos < s.display_end())
+    }
+
     /// The word being sung within line `index`, and how far into it the singing
     /// has got.
     ///

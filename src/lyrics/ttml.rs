@@ -56,13 +56,17 @@ pub fn parse_time(raw: &str) -> Option<f64> {
     Some(seconds)
 }
 
-/// Spans that are not part of the sung line.
+/// Spans that are not part of the sung lyric at all.
 fn is_skippable_role(role: &str) -> bool {
-    // Translations and romanisations are separate text; background vocals are a
-    // second voice that would interleave confusingly with the main line.
-    role.starts_with("x-translation")
-        || role.starts_with("x-roman")
-        || role.starts_with("x-bg")
+    // Translations and romanisations are a different text for the same words.
+    // Background vocals used to be dropped here too; they are a second voice,
+    // and are now captured instead — see `SpanKind::Background`.
+    role.starts_with("x-translation") || role.starts_with("x-roman")
+}
+
+/// A background vocal: a second voice singing over the line it sits inside.
+fn is_background_role(role: &str) -> bool {
+    role.starts_with("x-bg")
 }
 
 /// The `dur` attribute of `<body>` (or `<tt>`): the length of the recording the
@@ -104,13 +108,53 @@ pub(crate) fn format_time(secs: f64) -> String {
     format!("{minutes:02}:{rest:06.3}")
 }
 
-/// One `<p>` being accumulated.
+/// One run of text being accumulated: a `<p>`, or the background vocal inside
+/// one. Both are built the same way, so text, entities, `<br/>` and word tags
+/// have exactly one code path between them.
 #[derive(Default)]
-struct Line {
+struct Buf {
     begin: Option<f64>,
+    end: Option<f64>,
     /// A2 body: word tags interleaved with the literal text between them.
     body: String,
     words: usize,
+}
+
+impl Buf {
+    /// Widen the times from a span inside this run. An `x-bg` wrapper usually
+    /// carries its own `begin`/`end`, but not always; where it does not, its
+    /// spans are the only record of when the phrase runs.
+    fn widen(&mut self, begin: Option<f64>, end: Option<f64>) {
+        if let Some(b) = begin
+            && self.begin.is_none_or(|cur| b < cur)
+        {
+            self.begin = Some(b);
+        }
+        if let Some(e) = end
+            && self.end.is_none_or(|cur| e > cur)
+        {
+            self.end = Some(e);
+        }
+    }
+}
+
+/// One `<p>`: the line itself, plus any voices singing over it.
+struct OutLine {
+    line: Buf,
+    backgrounds: Vec<Buf>,
+}
+
+/// What a `<span>` on the stack is, so that skipping and capturing stay
+/// independent. They have to be: the real database nests a translation *inside*
+/// a background vocal, and a single depth counter cannot both keep the
+/// background and drop the translation within it.
+enum SpanKind {
+    /// A translation or romanisation, and everything under it.
+    Skipped,
+    /// The `x-bg` wrapper. Its contents accumulate into a buffer of their own.
+    Background,
+    /// An ordinary timed span; the payload is its `end`, used to close the word.
+    Word(Option<f64>),
 }
 
 /// Convert a TTML document into an enhanced-LRC string.
@@ -118,11 +162,13 @@ pub fn to_enhanced_lrc(xml: &str) -> Result<String> {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(false);
 
-    let mut out = String::new();
-    let mut line: Option<Line> = None;
-    // Depth of nested spans we are ignoring (a translation, or background vocals).
+    let mut out: Vec<OutLine> = Vec::new();
+    let mut line: Option<OutLine> = None;
+    // The background vocal currently being accumulated, if we are inside one.
+    let mut bg: Option<Buf> = None;
+    // Depth of nested spans we are ignoring (a translation or a romanisation).
     let mut skip_depth = 0usize;
-    let mut span_stack: Vec<Option<f64>> = Vec::new();
+    let mut span_stack: Vec<SpanKind> = Vec::new();
     let mut saw_body = false;
     // Counted so a `<p>` we cannot place in time is reported rather than
     // skipped. Partial lyrics are worse than none: they look like the song has
@@ -139,9 +185,9 @@ pub fn to_enhanced_lrc(xml: &str) -> Result<String> {
             Ok(Event::Empty(e)) => {
                 if local_name(e.name().as_ref()) == "br"
                     && skip_depth == 0
-                    && let Some(l) = line.as_mut()
+                    && let Some(b) = open_buf(&mut bg, &mut line)
                 {
-                    l.body.push(' ');
+                    b.body.push(' ');
                 }
             }
 
@@ -155,48 +201,75 @@ pub fn to_enhanced_lrc(xml: &str) -> Result<String> {
                         if begin.is_none() {
                             unparsable_lines += 1;
                         }
-                        line = Some(Line {
-                            begin,
-                            ..Default::default()
+                        line = Some(OutLine {
+                            line: Buf {
+                                begin,
+                                end: attr(&e, "end").as_deref().and_then(parse_time),
+                                ..Default::default()
+                            },
+                            backgrounds: Vec::new(),
                         });
                     }
                     "span" => {
                         let role = attr(&e, "role").unwrap_or_default();
+                        // The skip test comes first, so a translation nested
+                        // inside a background vocal is still dropped.
                         if skip_depth > 0 || is_skippable_role(&role) {
                             skip_depth += 1;
-                            span_stack.push(None);
+                            span_stack.push(SpanKind::Skipped);
                             continue;
                         }
                         let begin = attr(&e, "begin").and_then(|v| parse_time(&v));
                         let end = attr(&e, "end").and_then(|v| parse_time(&v));
-                        if let (Some(l), Some(b)) = (line.as_mut(), begin) {
-                            l.body.push_str(&format!("<{}>", format_time(b)));
-                            l.words += 1;
+                        // An `x-bg` inside an `x-bg` is not a thing; treat the
+                        // inner one as an ordinary span rather than losing the
+                        // capture already in progress.
+                        if is_background_role(&role) && bg.is_none() {
+                            bg = Some(Buf {
+                                begin,
+                                end,
+                                ..Default::default()
+                            });
+                            span_stack.push(SpanKind::Background);
+                            continue;
                         }
-                        span_stack.push(end);
+                        if let Some(b) = open_buf(&mut bg, &mut line) {
+                            if let Some(t) = begin {
+                                b.body.push_str(&format!("<{}>", format_time(t)));
+                                b.words += 1;
+                            }
+                            b.widen(begin, end);
+                        }
+                        span_stack.push(SpanKind::Word(end));
                     }
                     _ => {}
                 }
             }
 
             Ok(Event::End(e)) => match local_name(e.name().as_ref()) {
-                "span" => {
-                    let end = span_stack.pop().flatten();
-                    if skip_depth > 0 {
-                        skip_depth -= 1;
-                        continue;
+                "span" => match span_stack.pop() {
+                    Some(SpanKind::Skipped) => skip_depth -= 1,
+                    Some(SpanKind::Background) => {
+                        if let (Some(done), Some(l)) = (bg.take(), line.as_mut()) {
+                            l.backgrounds.push(done);
+                        }
                     }
                     // Close the word so a gap before the next one is honoured.
-                    if let (Some(l), Some(end)) = (line.as_mut(), end) {
-                        l.body.push_str(&format!("<{}>", format_time(end)));
+                    Some(SpanKind::Word(end)) => {
+                        if let (Some(b), Some(end)) = (open_buf(&mut bg, &mut line), end) {
+                            b.body.push_str(&format!("<{}>", format_time(end)));
+                        }
                     }
-                }
+                    None => {}
+                },
                 "p" => {
-                    if let Some(l) = line.take()
-                        && let Some(begin) = l.begin
-                    {
-                        let body = l.body.trim();
-                        out.push_str(&format!("[{}]{}\n", format_time(begin), body));
+                    // An unclosed background would otherwise leak into the next
+                    // line and take its text with it.
+                    if let (Some(done), Some(l)) = (bg.take(), line.as_mut()) {
+                        l.backgrounds.push(done);
+                    }
+                    if let Some(l) = line.take() {
+                        out.push(l);
                     }
                 }
                 _ => {}
@@ -206,8 +279,8 @@ pub fn to_enhanced_lrc(xml: &str) -> Result<String> {
                 if skip_depth > 0 {
                     continue;
                 }
-                if let Some(l) = line.as_mut() {
-                    push_text(&mut l.body, t.xml10_content().as_ref());
+                if let Some(b) = open_buf(&mut bg, &mut line) {
+                    push_text(&mut b.body, t.xml10_content().as_ref());
                 }
             }
 
@@ -217,16 +290,18 @@ pub fn to_enhanced_lrc(xml: &str) -> Result<String> {
                 if skip_depth > 0 {
                     continue;
                 }
-                if let Some(l) = line.as_mut()
+                if let Some(b) = open_buf(&mut bg, &mut line)
                     && let Some(resolved) = resolve_entity(r.xml10_content().as_ref())
                 {
-                    l.body.push_str(&resolved);
+                    b.body.push_str(&resolved);
                 }
             }
 
             _ => {}
         }
     }
+
+    let out = render_lines(&out);
 
     if !saw_body {
         return Err(anyhow!("not a TTML document: no <body> element"));
@@ -241,6 +316,58 @@ pub fn to_enhanced_lrc(xml: &str) -> Result<String> {
         ));
     }
     Ok(out)
+}
+
+/// Whichever run of text is currently open: the background vocal if we are
+/// inside one, otherwise the line itself.
+fn open_buf<'a>(bg: &'a mut Option<Buf>, line: &'a mut Option<OutLine>) -> Option<&'a mut Buf> {
+    match bg {
+        Some(b) => Some(b),
+        None => line.as_mut().map(|l| &mut l.line),
+    }
+}
+
+/// Write the accumulated lines out as enhanced LRC.
+///
+/// Each `<p>` becomes its line followed by its background vocals. A background
+/// names its parent by that line's start rather than relying on adjacency,
+/// because `lrc::finalise` sorts by time and a background that comes in after
+/// the next line has started would otherwise attach to the wrong one.
+///
+/// A background whose time cannot be read is dropped rather than failing the
+/// document. It is texture: losing the whole set of lyrics over it would be the
+/// wrong trade, which is the opposite of the call made for a `<p>` — a line
+/// nobody can place in time still fails loudly.
+fn render_lines(lines: &[OutLine]) -> String {
+    let mut out = String::new();
+    for l in lines {
+        let Some(begin) = l.line.begin else { continue };
+        out.push_str(&format!("[{}]", format_time(begin)));
+        if let Some(end) = l.line.end {
+            out.push_str(&format!("[end:{}]", format_time(end)));
+        }
+        out.push_str(l.line.body.trim());
+        out.push('\n');
+
+        for b in &l.backgrounds {
+            let Some(bg_begin) = b.begin else { continue };
+            let body = b.body.trim();
+            if body.is_empty() {
+                continue;
+            }
+            out.push_str(&format!(
+                "[{}][bg:{}]",
+                format_time(bg_begin),
+                format_time(begin)
+            ));
+            if let Some(end) = b.end {
+                out.push_str(&format!("[end:{}]", format_time(end)));
+            }
+            out.push_str(body);
+            out.push('\n');
+        }
+    }
+    out
 }
 
 /// Append text, collapsing whitespace runs to a single space.

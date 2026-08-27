@@ -61,6 +61,7 @@ line-level lyrics are shown a phrase at a time.
 | `0` | forget this song's shift and go back to the default |
 | `f` | cycle font (block → compact → mini) |
 | `w` | switch between one word at a time and whole lines |
+| `v` | switch between showing both voices at once and one |
 | `s` | cycle the highlight: never → auto → always |
 | `r` | forget the cached lyrics and look them up again |
 
@@ -73,7 +74,8 @@ back there. `lyrics paths` prints the file and how many songs are in it, and
 `lyrics status` shows whether the song playing has a saved shift.
 
 A few flags are worth knowing. `--whole-lines` always shows the full phrase,
-`--sweep` highlights the sung part of whatever is on screen, and `--font
+`--sweep` highlights the sung part of whatever is on screen, `--single-voice`
+keeps the screen to one line where two people are singing, and `--font
 compact` picks a smaller face. If several players are running, `--player
 spotify` pins the one you mean, and `--offset-ms -250` moves the starting point
 for every song you have not tuned by hand. To work from your own lyrics rather
@@ -205,9 +207,29 @@ real timestamps, which makes it an estimate, and `lyrics status` labels it as
 one. It remains a display effect throughout: nothing invented is ever written to
 disk.
 
+**Two voices.** Where two people are singing at once, both are on screen. A
+backing vocal — the `(ooh ooh)` behind the line, which the syllable-timed
+sources mark as its own voice — sits above the line in grey and a size smaller,
+because it is texture rather than the thing being read; it is drawn whole and
+never swept, and the line underneath keeps the highlight. The other half of a
+duet is drawn full size and lit, since it is a voice and not an echo, and while
+one is up the line beneath it is shown whole rather than a word at a time.
+
+Overlap alone is not enough to call something a duet. Across 39 files from the
+AMLL database the median overlap between one line and the next is a quarter of
+a second, and three quarters of them are under a second: that is one phrase's
+tail running into the next one's head, not two people singing, and stacking it
+would flicker a second line up a couple of times a song. So a duet has to
+overlap for a full second and for half of the shorter phrase. A backing vocal
+needs no such test — the source says outright that it is a second voice.
+
 **Drawing.** ratatui diffs the screen buffer, so a frame that has not changed
 emits no bytes at all. Lines wrap at word boundaries and the font steps down a
-size before anything would be clipped, so nothing is ever truncated.
+size before anything would be clipped, so nothing is ever truncated. Where two
+voices will not fit, both step down together first, and only if even the
+smallest font cannot hold them is the second voice dropped — the line being
+read then goes back to the size it would have had on its own, rather than
+staying shrunk for something that is no longer there.
 
 ## Platforms
 

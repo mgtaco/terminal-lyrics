@@ -43,7 +43,7 @@ fn translations_are_not_treated_as_lyrics() {
 }
 
 #[test]
-fn background_vocals_are_left_out_of_the_main_line() {
+fn background_vocals_become_a_second_voice_above_the_line() {
     let xml = r#"<tt xmlns="http://www.w3.org/ns/ttml"
       xmlns:ttm="http://www.w3.org/ns/ttml#metadata"><body><div>
       <p begin="00:01.000" end="00:03.000">
@@ -55,8 +55,112 @@ fn background_vocals_are_left_out_of_the_main_line() {
       </p>
     </div></body></tt>"#;
     let parsed = lrc::parse(&ttml::to_enhanced_lrc(xml).unwrap());
+    // The backing vocal is a voice of its own, so it stays out of the line's
+    // own text and words — it must not interleave with what is being read.
     assert_eq!(parsed.lines[0].text, "Main line");
     assert_eq!(parsed.lines[0].words.len(), 2);
+
+    let second = &parsed.lines[0].secondary[0];
+    assert_eq!(second.text, "(echo)");
+    assert!(second.background, "an x-bg span is a background vocal");
+    assert!((second.start - 1.2).abs() < 0.001);
+    assert!((second.end - 1.4).abs() < 0.001);
+}
+
+#[test]
+fn a_translation_inside_a_background_span_is_still_dropped() {
+    // The shape the real database writes: the translation of the backing vocal
+    // lives inside the backing vocal. Capturing one must not capture the other.
+    let parsed = lrc::parse(&ttml::to_enhanced_lrc(&fixture("duet_bg.ttml")).unwrap());
+    let second = &parsed.lines[0].secondary[0];
+    assert_eq!(second.text, "(Know)");
+    assert!(
+        !parsed.lines.iter().any(|l| l.text.contains('知')),
+        "translations are still not lyrics, wherever they are nested"
+    );
+}
+
+#[test]
+fn a_background_wrapper_with_no_times_takes_them_from_its_spans() {
+    let parsed = lrc::parse(&ttml::to_enhanced_lrc(&fixture("duet_bg.ttml")).unwrap());
+    let second = &parsed.lines[1].secondary[0];
+    assert_eq!(second.text, "(ooh)");
+    assert!((second.start - 21.0).abs() < 0.001, "start came from the span");
+    assert!((second.end - 22.0).abs() < 0.001, "end came from the span");
+}
+
+#[test]
+fn a_background_line_is_attached_to_its_own_line_not_the_nearest_one() {
+    // This one comes in at 34 s, after the following line has already started
+    // at 33 s. Time order alone would hang it on the wrong line.
+    let parsed = lrc::parse(&ttml::to_enhanced_lrc(&fixture("duet_bg.ttml")).unwrap());
+    let host = parsed
+        .lines
+        .iter()
+        .find(|l| l.text == "Long third line")
+        .expect("the line the background belongs to");
+    assert_eq!(host.secondary[0].text, "(late)");
+    let neighbour = parsed
+        .lines
+        .iter()
+        .find(|l| l.text == "Fourth line")
+        .expect("the line it starts over");
+    assert!(
+        neighbour.secondary.iter().all(|s| !s.background),
+        "the background belongs to the line that declared it"
+    );
+}
+
+#[test]
+fn a_paragraph_end_is_written_out_instead_of_discarded() {
+    // Without it there is no way to tell a real overlap from a line that simply
+    // runs until the next one starts.
+    let a2 = ttml::to_enhanced_lrc(&fixture("duet_bg.ttml")).unwrap();
+    assert!(a2.contains("[end:"), "got: {a2}");
+}
+
+#[test]
+fn a_quarter_second_overlap_is_slop_not_a_duet() {
+    // The median overlap across the database is a quarter of a second: one
+    // phrase's tail running into the next one's head. Stacking those would put
+    // a second line on screen a couple of times a song for a few frames each.
+    let parsed = lrc::parse(&ttml::to_enhanced_lrc(&fixture("duet_bg.ttml")).unwrap());
+    let after = parsed
+        .lines
+        .iter()
+        .find(|l| l.text == "Slop after")
+        .expect("the second half of the near-miss pair");
+    assert!(after.secondary.is_empty(), "got: {:?}", after.secondary);
+}
+
+#[test]
+fn two_voices_overlapping_for_seconds_are_both_kept() {
+    let parsed = lrc::parse(&ttml::to_enhanced_lrc(&fixture("duet_bg.ttml")).unwrap());
+    let later = parsed
+        .lines
+        .iter()
+        .find(|l| l.text == "And I will always need you")
+        .expect("the voice that comes in second");
+    let second = &later.secondary[0];
+    assert_eq!(second.text, "I will always love you");
+    assert!(!second.background, "a duet partner is not a backing vocal");
+}
+
+#[test]
+fn a_background_vocal_with_an_unreadable_time_is_dropped_rather_than_failing_the_file() {
+    // The opposite call to the one made for a <p>: a line nobody can place in
+    // time still fails loudly, because partial lyrics are worse than none. A
+    // backing vocal is texture, and losing the whole song over it would not be.
+    let xml = r#"<tt xmlns="http://www.w3.org/ns/ttml"
+      xmlns:ttm="http://www.w3.org/ns/ttml#metadata"><body><div>
+      <p begin="00:01.000" end="00:03.000">
+        <span begin="00:01.000" end="00:03.000">Main line</span>
+        <span ttm:role="x-bg" begin="12f" end="14f"><span>(echo)</span></span>
+      </p>
+    </div></body></tt>"#;
+    let parsed = lrc::parse(&ttml::to_enhanced_lrc(xml).expect("the line still converts"));
+    assert_eq!(parsed.lines[0].text, "Main line");
+    assert!(parsed.lines[0].secondary.is_empty());
 }
 
 #[test]
@@ -77,6 +181,9 @@ fn a_real_database_entry_parses_end_to_end() {
     assert_eq!(parsed.lines.len(), 6);
     assert_eq!(parsed.lines[0].text, "Flashing Lights");
     assert_eq!(parsed.lines[0].words.len(), 2);
+    // Nothing in this one overlaps and nothing sings behind it: a second voice
+    // appearing here would mean the thresholds are firing on ordinary lines.
+    assert!(parsed.lines.iter().all(|l| l.secondary.is_empty()));
 
     // Every word must sit inside its line and inside the text it points at.
     for line in &parsed.lines {
@@ -166,6 +273,7 @@ fn a_file_mixing_both_time_formats_keeps_every_line() {
         "the bare-second lines are the ones that used to vanish"
     );
     assert_eq!(parsed.lines.iter().filter(|l| l.start >= 60.0).count(), 4);
+    assert!(parsed.lines.iter().all(|l| l.secondary.is_empty()));
     // The first verse, which used to vanish entirely.
     assert_eq!(parsed.lines[0].text, "I threw a wish in the well");
     assert!((parsed.lines[0].start - 4.658).abs() < 0.001);
