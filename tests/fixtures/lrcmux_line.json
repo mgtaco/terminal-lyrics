@@ -1,0 +1,20 @@
+{
+  "track": {
+    "title": "Line Level Only",
+    "artist": "Fixture",
+    "album": "Fixtures",
+    "duration": 200
+  },
+  "meta": {
+    "source": {
+      "id": "netease",
+      "name": "NetEase",
+      "url": "https://music.163.com"
+    },
+    "level": "line"
+  },
+  "lines": [
+    { "text": "First line, no word tags", "start": 12500, "end": 15000, "words": [] },
+    { "text": "Second line", "start": 15000, "end": 18250 }
+  ]
+}

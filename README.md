@@ -8,7 +8,7 @@
 [![MIT licence](https://img.shields.io/github/license/mgtaco/terminal-lyrics?style=flat-square&color=8A2BE2)](LICENSE)
 [![Linux and macOS](https://img.shields.io/badge/Linux_%2B_macOS-MPRIS_%2F_AppleScript-64748B?style=flat-square)](#platforms)
 [![Self-contained binary](https://img.shields.io/badge/binary-self--contained-2EA44F?style=flat-square)](#install)
-[![Lyrics from LRCLIB and AMLL](https://img.shields.io/badge/lyrics-LRCLIB_%2B_AMLL-0EA5E9?style=flat-square)](#how-it-works)
+[![Four lyrics sources](https://img.shields.io/badge/lyrics-4_synced_sources-0EA5E9?style=flat-square)](#how-it-works)
 [![Code size](https://img.shields.io/github/languages/code-size/mgtaco/terminal-lyrics?style=flat-square&color=64748B)](https://github.com/mgtaco/terminal-lyrics)
 
 ![Word-timed lyrics appearing one word at a time, a long word building up syllable by syllable](docs/demo.gif)
@@ -114,17 +114,42 @@ among them. On Linux that read costs no subprocess at all; on macOS it is one
 short-lived `osascript`, which is also what makes a scrub show up within a
 second there despite AppleScript having no seek notification to offer.
 
-**Sources.** `--lrc-dir` first, then the cache, then two networks in order:
+**Sources.** `--lrc-dir` first, then the cache, then four networks in order.
+The order is by what each is good at rather than by how often it answers, so a
+better-looking set of lyrics is never passed over for a merely likelier one:
 
 * the [AMLL TTML database](https://github.com/amll-dev/amll-ttml-db), which is
-  CC0, community-maintained and **word-by-word**, and which is keyed by the
+  CC0, community-maintained and **syllable-timed**, and which is keyed by the
   Spotify track ID the player already hands us, so it needs neither a search nor
-  any matching guesswork. It holds only about 2,400 entries, so it is tried
-  first and misses often.
+  any matching guesswork. It holds only about 2,400 entries, so it costs one
+  request and misses often — but when it hits, nothing else needs asking.
+* [LyricsPlus](https://github.com/ibratabian17/lyricsplus), which serves Apple
+  Music's own TTML and is **syllable-timed** too: it splits a long word into
+  pieces the display then builds up in place. Matched on artist and title, with
+  the length Apple records in the document used to throw out a different edit.
+  Its `platformId=spotify:…` parameter is not used: the public instance has no
+  Spotify credentials to resolve an ID with, and answers every such query 404.
+* [lrcmux](https://github.com/f1nniboy/lrcmux), one API in front of Musixmatch
+  richsync, KuGou, NetEase, Genius and YouTube Music. **Word-timed**, and the
+  widest of the four: five upstreams means it degrades rather than dies. It says
+  outright whether the answer it found carries word timings.
 * [LRCLIB](https://lrclib.net), which has millions of tracks but line-level
   timing only. Every one of the 923 `syncedLyrics` entries sampled was
-  line-level, which is why the word-by-word display depends on the first source
-  being worth having.
+  line-level, which is why it is asked last rather than first.
+
+LyricsPlus and lrcmux are small community-run instances, and both projects
+document self-hosting, so both base URLs are configurable — as is the list
+itself, which doubles as the on/off switch:
+
+```toml
+providers = ["amll", "lyricsplus", "lrcmux", "lrclib"]
+```
+
+Dropping a name skips that provider; the order of the list is the order they are
+consulted in. A provider that is down is logged and stepped over, because losing
+LRCLIB's line-level answer to somebody's server being unreachable would be the
+worst trade available. A lookup only fails outright when every provider failed
+and none of them managed to say "not here".
 
 **Matching LRCLIB.** The lookup starts with an exact `/api/get` on artist,
 title, album and duration, retries without the album, falls back to a scored
@@ -135,8 +160,8 @@ displayed out of sync, and misses are cached for a day so that a track LRCLIB
 has never heard of is not queried again on every play.
 
 **Word timing.** What appears on screen follows the lyrics rather than a
-preference. A source carrying real per-word timestamps, which in practice means
-an AMLL hit, is shown one word at a time with each word appearing on its own
+preference. A source carrying real per-word timestamps — three of the four now
+do — is shown one word at a time with each word appearing on its own
 timestamp, whereas a line-level source has nothing to split on and so is shown
 whole. Because that decision is made per line rather than per file, a file that
 carries tags on only some of its lines still shows the rest in full. Where a
@@ -185,7 +210,7 @@ backend that says so rather than failing obscurely.
 ## Development
 
 ```bash
-cargo test                      # 109 tests, no terminal or player needed
+cargo test                      # 135 tests, no terminal or player needed
 cargo clippy --all-targets -- -D warnings
 cargo run --example pump_dump -- 15   # dump the live player event stream
 ```
@@ -201,17 +226,19 @@ on a developer's machine and fail outright in CI.
 
 ## Limitations
 
-* Word-timed lyrics only exist for what is in the AMLL database — about 2,400
-  entries, 1,588 distinct songs once the duplicate releases are folded together.
-  Everything else falls back to LRCLIB's line-level entries and shows no moving
-  highlight. `lyrics status` says which you got. To hear the word-by-word mode
-  without hunting for a match, this playlist collects the English-language ones:
-  [AMLL word-timed (English)](https://open.spotify.com/playlist/73AC0u1Ujko0IpNFnRxzAo),
-  429 songs. It is only the English slice — the database is around half Chinese
-  and Japanese, and those work just as well.
-* Because AMLL is keyed by Spotify track ID, the word-timed path only applies
-  when the player reports one, though other players still get LRCLIB.
-* Anything held by neither source will not be found, and pressing `r` will not
+* Word timings are still not universal. Three of the four sources carry them and
+  between them they cover most of what you are likely to play, but an obscure
+  track can still come back line-level from LRCLIB, with no moving highlight.
+  `lyrics status` says which source you got and whether it carried real word
+  timings.
+* Two of the four sources are one person's server each. They are configurable
+  and self-hostable for exactly that reason, and the lookup steps over one that
+  is down rather than failing — but a permanent disappearance would cost real
+  coverage.
+* Because AMLL is keyed by Spotify track ID, that one source only applies when
+  the player reports one. The other three match on artist and title, so they
+  work anywhere.
+* Anything held by none of the four will not be found, and pressing `r` will not
   conjure it into existence.
 * On Linux, only MPRIS players are visible, so anything that does not expose an
   MPRIS interface goes unnoticed. On macOS it is narrower still: Spotify and
@@ -229,9 +256,13 @@ tacoproz1. This is a separate program written from scratch in Rust rather than a
 fork of that one, and it takes a different approach, with no music library to
 scan and no pre-processing pass.
 
-Lyrics come from [LRCLIB](https://lrclib.net) and the
-[AMLL TTML database](https://github.com/amll-dev/amll-ttml-db) (CC0), neither of
-which is affiliated with this project.
+Lyrics come from [LRCLIB](https://lrclib.net), the
+[AMLL TTML database](https://github.com/amll-dev/amll-ttml-db) (CC0),
+[LyricsPlus](https://github.com/ibratabian17/lyricsplus) and
+[lrcmux](https://github.com/f1nniboy/lrcmux) (MIT). None of them is affiliated
+with this project, and the last two are run by individuals out of their own
+pockets — the LyricsPlus README says as much about its own hosting. If you lean
+on them, self-host: `lyricsplus_url` and `lrcmux_url` are there for it.
 
 ## License
 

@@ -15,7 +15,13 @@ use crate::lrc;
 const MISS_TTL: Duration = Duration::from_secs(24 * 60 * 60);
 /// Bumped to 2: entries written before the TTML time-format fix are missing
 /// every lyric line under a minute, and a stale hit would keep serving them.
-const CACHE_VERSION: u32 = 2;
+///
+/// Bumped to 3 for the LyricsPlus and lrcmux providers. Every track played
+/// before them is cached with whatever LRCLIB had, which is line-level; `get`
+/// returns that before a provider is ever consulted, so without this the two
+/// new word-timed sources would be invisible across the user's entire existing
+/// library — the feature would look like it had not shipped.
+const CACHE_VERSION: u32 = 3;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Entry {

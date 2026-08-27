@@ -12,10 +12,8 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use serde::Deserialize;
 
-use super::cache::Cache;
-use super::{Found, Outcome, Source, amll, normalize};
+use super::{Found, MAX_DURATION_DELTA, Source, normalize};
 use crate::lrc;
-use crate::player::Track;
 
 const API: &str = "https://lrclib.net/api";
 const USER_AGENT: &str = concat!(
@@ -23,9 +21,6 @@ const USER_AGENT: &str = concat!(
     env!("CARGO_PKG_VERSION"),
     " (https://github.com/mgtaco/terminal-lyrics)"
 );
-/// Beyond this the "match" is a different edit of the song and the timings are
-/// wrong throughout — worse than showing nothing.
-const MAX_DURATION_DELTA: f64 = 5.0;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -240,67 +235,4 @@ pub async fn fetch(
     }
 
     Ok(None)
-}
-
-/// Cache-aware lookup for a live track. Never returns an error for "no lyrics";
-/// a network failure is reported so the UI can distinguish it from a real miss.
-pub async fn lookup(
-    client: &LrcLib,
-    cache: &Cache,
-    track: &Track,
-) -> Result<Outcome> {
-    let key = &track.id;
-    if let Some(cached) = cache.get(key) {
-        return Ok(match cached {
-            Some(found) => Outcome::Found(Box::new(found)),
-            None => Outcome::Missing,
-        });
-    }
-
-    // Word-timed lyrics first. AMLL is keyed by the Spotify ID we already hold,
-    // so this costs one request and no matching guesswork; LRCLIB then covers
-    // everything AMLL does not have, which is most things.
-    let found = match amll::spotify_track_id(key) {
-        Some(id) => amll::fetch(client.http(), id).await.unwrap_or_else(|e| {
-            // A network blip here must not cost the user LRCLIB's answer.
-            debug(&format!("amll lookup failed: {e:#}"));
-            None
-        }),
-        None => None,
-    };
-
-    let found = match found {
-        Some(found) => Some(found),
-        None => {
-            fetch(
-                client,
-                &track.artist,
-                &track.title,
-                track.album.as_deref(),
-                track.length,
-            )
-            .await?
-        }
-    };
-
-    match found {
-        Some(found) => {
-            let id = match found.source {
-                Source::LrcLib { id } => Some(id),
-                _ => None,
-            };
-            cache.put_hit(key, &track.label(), &found.raw, id, found.synced);
-            Ok(Outcome::Found(Box::new(found)))
-        }
-        None => {
-            cache.put_miss(key, &track.label());
-            Ok(Outcome::Missing)
-        }
-    }
-}
-
-fn debug(msg: &str) {
-    if std::env::var_os("LYRICS_DEBUG").is_some() {
-        eprintln!("[lyrics] {msg}");
-    }
 }

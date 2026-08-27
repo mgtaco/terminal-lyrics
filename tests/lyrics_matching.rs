@@ -173,8 +173,12 @@ fn entries_written_by_an_older_version_are_not_served() {
         .map(|e| e.path())
         .find(|p| p.extension().is_some_and(|x| x == "json"))
         .expect("entry should exist");
+    // Stamp it version 0 without naming the current one: this test has to keep
+    // working across every future bump, not just the one it was written for.
     let text = std::fs::read_to_string(&file).unwrap();
-    std::fs::write(&file, text.replace("\"version\":2", "\"version\":1")).unwrap();
+    let at = text.find("\"version\":").expect("entries carry a version") + "\"version\":".len();
+    let end = at + text[at..].find(|c: char| !c.is_ascii_digit()).unwrap();
+    std::fs::write(&file, format!("{}0{}", &text[..at], &text[end..])).unwrap();
 
     assert!(
         cache.get("k").is_none(),

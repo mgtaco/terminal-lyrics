@@ -17,8 +17,27 @@ offset_ms = 0
 # Check this directory for "Artist - Title.lrc" before querying the network.
 # lrc_dir = "~/lyrics"
 
-# Set false to use only the cache and lrc_dir — no AMLL, no LRCLIB.
+# Set false to use only the cache and lrc_dir — no network lookups at all.
 network = true
+
+# Which lyrics sources to consult, in the order they are consulted. Dropping a
+# name turns that provider off; an unknown name is an error, not a silent skip.
+#
+#   amll        the AMLL TTML database, syllable-timed, keyed by Spotify ID
+#   lyricsplus  Apple Music's TTML, syllable-timed, matched by artist/title
+#   lrcmux      Musixmatch, KuGou, NetEase, Genius, YouTube Music — word-timed
+#   lrclib      millions of tracks, line-level only
+#
+# The default order puts the best-looking source first and the widest last, so
+# a better set of lyrics is never passed over for a merely likelier one. A
+# provider that is down is stepped over rather than failing the lookup.
+providers = ["amll", "lyricsplus", "lrcmux", "lrclib"]
+
+# The two community-run instances above. Both projects document self-hosting,
+# and both are one person's server, so point these at your own if you rely on
+# them.
+lyricsplus_url = "https://lyricsplus.prjktla.my.id"
+lrcmux_url = "https://api.lrcmux.dev"
 
 # Show one word at a time when the lyrics carry real per-word timings.
 # Lines without word timings are always shown whole.

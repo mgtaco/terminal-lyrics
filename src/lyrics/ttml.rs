@@ -65,7 +65,39 @@ fn is_skippable_role(role: &str) -> bool {
         || role.starts_with("x-bg")
 }
 
-fn format_time(secs: f64) -> String {
+/// The `dur` attribute of `<body>` (or `<tt>`): the length of the recording the
+/// lyrics were timed against.
+///
+/// Apple writes the real track length here — Radiohead's *Creep* comes back as
+/// `dur="3:58.640"`, which is its Spotify duration to the millisecond. That
+/// makes it good enough to reject a document timed against a different edit,
+/// which is the one way a "matching" set of lyrics can be wrong from the first
+/// line to the last.
+pub fn document_duration(xml: &str) -> Option<f64> {
+    let mut reader = Reader::from_str(xml);
+    loop {
+        let e = match reader.read_event() {
+            Ok(Event::Start(e)) => e,
+            Ok(Event::Empty(e)) => e,
+            Ok(Event::Eof) | Err(_) => return None,
+            _ => continue,
+        };
+        match local_name(e.name().as_ref()) {
+            "tt" | "body" => {
+                if let Some(d) = attr(&e, "dur").as_deref().and_then(parse_time) {
+                    return Some(d);
+                }
+            }
+            // Into the lyrics themselves: there is no duration to find.
+            "div" | "p" => return None,
+            _ => {}
+        }
+    }
+}
+
+/// `mm:ss.SSS`, the timestamp form every LRC line here is written in. Shared
+/// with the providers that build A2 lines without going through TTML.
+pub(crate) fn format_time(secs: f64) -> String {
     let secs = secs.max(0.0);
     let minutes = (secs / 60.0).floor() as u64;
     let rest = secs - minutes as f64 * 60.0;

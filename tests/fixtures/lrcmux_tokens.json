@@ -1,0 +1,78 @@
+{
+  "track": {
+    "cover": {
+      "small": "https://cdn-images.dzcdn.net/images/cover/4813de733c6fb05c90187ab5cf3e13c7/56x56-000000-80-0-0.jpg",
+      "medium": "https://cdn-images.dzcdn.net/images/cover/4813de733c6fb05c90187ab5cf3e13c7/250x250-000000-80-0-0.jpg",
+      "big": "https://cdn-images.dzcdn.net/images/cover/4813de733c6fb05c90187ab5cf3e13c7/500x500-000000-80-0-0.jpg"
+    },
+    "isrc": "FISGC9900001",
+    "title": "Sandstorm",
+    "artist": "Darude",
+    "album": "Before the Storm",
+    "duration": 225
+  },
+  "meta": {
+    "source": {
+      "id": "kugou",
+      "name": "KuGou",
+      "url": "https://kugou.com"
+    },
+    "level": "word"
+  },
+  "lines": [
+    {
+      "text": "Du, du dudududududuud,",
+      "start": 3166,
+      "end": 7146,
+      "words": [
+        {
+          "text": "Du",
+          "start": 3166,
+          "end": 3346
+        },
+        {
+          "text": ",",
+          "start": 3346,
+          "end": 3346
+        },
+        {
+          "text": " ",
+          "start": 3346,
+          "end": 3576
+        },
+        {
+          "text": "du",
+          "start": 3576,
+          "end": 3726
+        },
+        {
+          "text": " ",
+          "start": 3726,
+          "end": 6216
+        },
+        {
+          "text": "dudududududuud",
+          "start": 6216,
+          "end": 7146
+        },
+        {
+          "text": ",",
+          "start": 7146,
+          "end": 7146
+        }
+      ]
+    },
+    {
+      "text": "dudududuudu",
+      "start": 8056,
+      "end": 8066,
+      "words": [
+        {
+          "text": "dudududuudu",
+          "start": 8056,
+          "end": 8066
+        }
+      ]
+    }
+  ]
+}

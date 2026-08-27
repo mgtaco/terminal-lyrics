@@ -12,6 +12,7 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 
 use crate::cli::Cli;
+use crate::lyrics::{LRCMUX_URL, LYRICSPLUS_URL, Provider};
 
 /// When to highlight individual words as they are sung.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -73,6 +74,14 @@ pub struct Config {
     /// How far the predicted position may drift from the player's own
     /// `Position` before we re-anchor the clock.
     pub resync_threshold_ms: u64,
+    /// Which network sources to consult, in the order they are consulted.
+    /// Dropping a name is how a provider is turned off.
+    pub providers: Vec<Provider>,
+    /// Base URL of the LyricsPlus instance. Overridable because the default is
+    /// one person's server and the project documents self-hosting.
+    pub lyricsplus_url: String,
+    /// Base URL of the lrcmux instance, overridable for the same reason.
+    pub lrcmux_url: String,
 }
 
 impl Default for Config {
@@ -87,6 +96,9 @@ impl Default for Config {
             word_by_word: true,
             tick_ms: 30,
             resync_threshold_ms: 250,
+            providers: Provider::DEFAULT_ORDER.to_vec(),
+            lyricsplus_url: LYRICSPLUS_URL.to_string(),
+            lrcmux_url: LRCMUX_URL.to_string(),
         }
     }
 }
@@ -104,6 +116,11 @@ pub struct ConfigFile {
     pub word_by_word: Option<bool>,
     pub tick_ms: Option<u64>,
     pub resync_threshold_ms: Option<u64>,
+    /// An unknown name here is an error, not a silent skip: it would otherwise
+    /// look exactly like the provider being unreachable.
+    pub providers: Option<Vec<Provider>>,
+    pub lyricsplus_url: Option<String>,
+    pub lrcmux_url: Option<String>,
 }
 
 impl ConfigFile {
@@ -150,6 +167,21 @@ impl Config {
                 .resync_threshold_ms
                 .unwrap_or(d.resync_threshold_ms)
                 .clamp(50, 5000),
+            providers: cli
+                .providers
+                .clone()
+                .or(file.providers)
+                .unwrap_or(d.providers),
+            lyricsplus_url: cli
+                .lyricsplus_url
+                .clone()
+                .or(file.lyricsplus_url)
+                .unwrap_or(d.lyricsplus_url),
+            lrcmux_url: cli
+                .lrcmux_url
+                .clone()
+                .or(file.lrcmux_url)
+                .unwrap_or(d.lrcmux_url),
         }
     }
 }

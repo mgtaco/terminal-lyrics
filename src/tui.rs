@@ -16,7 +16,7 @@ use tokio::sync::mpsc;
 
 use crate::config::Config;
 use crate::lyrics::cache::Cache;
-use crate::lyrics::lrclib::{self, LrcLib};
+use crate::lyrics::Net;
 use crate::lyrics::{Outcome, Source};
 use crate::player::{EventRx, PlayerEvent, PlayerHandle, Track};
 use crate::render::font::{self, Font};
@@ -105,7 +105,7 @@ pub async fn run(
     player: PlayerHandle,
     events: EventRx,
     cache: Cache,
-    client: Option<LrcLib>,
+    client: Option<Net>,
 ) -> Result<()> {
     let terminal = ratatui::try_init().context("failed to take over the terminal")?;
     let result = run_inner(cfg, player, events, cache, client, terminal).await;
@@ -118,7 +118,7 @@ async fn run_inner(
     player: PlayerHandle,
     mut events: EventRx,
     cache: Cache,
-    client: Option<LrcLib>,
+    client: Option<Net>,
     mut terminal: DefaultTerminal,
 ) -> Result<()> {
     let start = Instant::now();
@@ -308,7 +308,8 @@ fn draw(terminal: &mut DefaultTerminal, app: &App) -> Result<()> {
 
 /// The one-line strip along the bottom.
 ///
-/// Just where the lyrics came from — `amll`, `lrclib`, `cache`, or a filename.
+/// Just where the lyrics came from — `amll`, `lyricsplus`, `lrcmux/musixmatch`,
+/// `lrclib`, `cache`, or a filename.
 /// Everything else that could go here (sync mode, offset, paused) is either
 /// visible on screen already or available from `lyrics status`; on the strip it
 /// was noise sitting under the lyrics.
@@ -330,7 +331,7 @@ fn start_lookup(
     app: &mut App,
     track: Option<Track>,
     cache: &std::sync::Arc<Cache>,
-    client: &Option<std::sync::Arc<LrcLib>>,
+    client: &Option<std::sync::Arc<Net>>,
     tx: &mpsc::UnboundedSender<FetchResult>,
 ) {
     let Some(track) = track.filter(Track::is_usable) else {
@@ -367,8 +368,9 @@ fn start_lookup(
 
     let cache = cache.clone();
     let tx = tx.clone();
+    let order = app.cfg.providers.clone();
     tokio::spawn(async move {
-        let outcome = lrclib::lookup(&client, &cache, &track).await;
+        let outcome = crate::lyrics::lookup(client.as_ref(), &order, &cache, &track).await;
         let _ = tx.send(FetchResult {
             track_id: track.id.clone(),
             outcome,
@@ -399,7 +401,7 @@ async fn handle_key(
     key: KeyEvent,
     player: &PlayerHandle,
     cache: &std::sync::Arc<Cache>,
-    client: &Option<std::sync::Arc<LrcLib>>,
+    client: &Option<std::sync::Arc<Net>>,
     tx: &mpsc::UnboundedSender<FetchResult>,
 ) {
     if key.kind != KeyEventKind::Press {

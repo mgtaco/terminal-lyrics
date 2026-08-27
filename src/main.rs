@@ -8,9 +8,8 @@ use clap::Parser;
 use terminal_lyrics::cli::{Cli, Command};
 use terminal_lyrics::config::{self, Config, ConfigFile};
 use terminal_lyrics::lyrics::cache::Cache;
-use terminal_lyrics::lyrics::lrclib::{self, LrcLib};
-use terminal_lyrics::lyrics::{Outcome, Source};
-use terminal_lyrics::player::Session;
+use terminal_lyrics::lyrics::{self, Net, Outcome, Source};
+use terminal_lyrics::player::{Session, Track};
 use terminal_lyrics::tui;
 
 /// How often to read `Position` from the player. This is the safety net for
@@ -60,15 +59,22 @@ async fn main() -> Result<()> {
     }
 }
 
-fn client_for(cfg: &Config) -> Result<Option<LrcLib>> {
+fn client_for(cfg: &Config) -> Result<Option<Net>> {
     if cfg.network {
-        Ok(Some(LrcLib::new()?))
+        Ok(Some(Net::new(
+            cfg.lyricsplus_url.clone(),
+            cfg.lrcmux_url.clone(),
+        )?))
     } else {
         Ok(None)
     }
 }
 
 /// Headless lookup, so the fetch path can be exercised without a player.
+///
+/// This runs the same provider chain the live path does, on a `Track` built
+/// from the flags — one chain, so a bug found here is the bug the visualiser
+/// has too.
 async fn cmd_fetch(
     cfg: &Config,
     artist: &str,
@@ -81,18 +87,17 @@ async fn cmd_fetch(
         anyhow::bail!("--no-network is set, so there is nothing to fetch from");
     };
 
-    // Same order the live path uses: word-timed source first, then LRCLIB.
-    let from_amll = match spotify_id.and_then(terminal_lyrics::lyrics::amll::spotify_track_id) {
-        Some(id) => terminal_lyrics::lyrics::amll::fetch(client.http(), id).await?,
-        None => None,
+    let track = Track {
+        // AMLL is keyed by this, so passing `--spotify-id` is what puts it in
+        // play; without one the chain simply skips it.
+        id: spotify_id.unwrap_or_default().to_string(),
+        title: title.to_string(),
+        artist: artist.to_string(),
+        album: album.map(str::to_string),
+        length: duration,
     };
 
-    let found = match from_amll {
-        Some(found) => Some(found),
-        None => lrclib::fetch(&client, artist, title, album, duration).await?,
-    };
-
-    match found {
+    match lyrics::first_hit(&client, &cfg.providers, &track).await? {
         Some(found) => {
             eprintln!(
                 "# {} · {} · {} lines",
@@ -180,6 +185,18 @@ async fn cmd_status(cfg: &Config) -> Result<()> {
             .unwrap_or_else(|| "(not reported)".into())
     );
     println!("cache key {}", track.id);
+    println!(
+        "providers {}",
+        if cfg.providers.is_empty() {
+            "(none)".to_string()
+        } else {
+            cfg.providers
+                .iter()
+                .map(|p| p.name())
+                .collect::<Vec<_>>()
+                .join(" -> ")
+        }
+    );
 
     let cache = Cache::new(config::cache_dir());
     if let Some(dir) = cfg.lrc_dir.as_deref()
@@ -194,7 +211,7 @@ async fn cmd_status(cfg: &Config) -> Result<()> {
         return Ok(());
     };
 
-    match lrclib::lookup(&client, &cache, &track).await? {
+    match lyrics::lookup(&client, &cfg.providers, &cache, &track).await? {
         Outcome::Found(found) => {
             report_lyrics(cfg, &found);
             if matches!(found.source, Source::LrcLib { .. }) {

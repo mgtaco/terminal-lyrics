@@ -1,0 +1,125 @@
+{
+  "track": {
+    "cover": {
+      "small": "https://cdn-images.dzcdn.net/images/cover/1dd56fd8824492e1a5106c99a00a85ec/56x56-000000-80-0-0.jpg",
+      "medium": "https://cdn-images.dzcdn.net/images/cover/1dd56fd8824492e1a5106c99a00a85ec/250x250-000000-80-0-0.jpg",
+      "big": "https://cdn-images.dzcdn.net/images/cover/1dd56fd8824492e1a5106c99a00a85ec/500x500-000000-80-0-0.jpg"
+    },
+    "isrc": "GBAYE9200070",
+    "title": "Creep",
+    "artist": "Radiohead",
+    "album": "Pablo Honey",
+    "duration": 238
+  },
+  "meta": {
+    "source": {
+      "id": "musixmatch",
+      "name": "Musixmatch",
+      "url": "https://www.musixmatch.com"
+    },
+    "level": "word"
+  },
+  "lines": [
+    {
+      "text": "When you were here before",
+      "start": 19980,
+      "end": 21895,
+      "words": [
+        {
+          "text": "When ",
+          "start": 19980,
+          "end": 20320
+        },
+        {
+          "text": "you ",
+          "start": 20320,
+          "end": 20420
+        },
+        {
+          "text": "were ",
+          "start": 20420,
+          "end": 20540
+        },
+        {
+          "text": "here ",
+          "start": 20540,
+          "end": 21070
+        },
+        {
+          "text": "before",
+          "start": 21070,
+          "end": 21895
+        }
+      ]
+    },
+    {
+      "text": "Couldn't look you in the eye",
+      "start": 24900,
+      "end": 26401,
+      "words": [
+        {
+          "text": "Couldn't ",
+          "start": 24900,
+          "end": 25130
+        },
+        {
+          "text": "look ",
+          "start": 25130,
+          "end": 25229
+        },
+        {
+          "text": "you ",
+          "start": 25229,
+          "end": 25360
+        },
+        {
+          "text": "in ",
+          "start": 25360,
+          "end": 25509
+        },
+        {
+          "text": "the ",
+          "start": 25509,
+          "end": 25759
+        },
+        {
+          "text": "eye",
+          "start": 25759,
+          "end": 26401
+        }
+      ]
+    },
+    {
+      "text": "You're just like an angel",
+      "start": 29940,
+      "end": 32406,
+      "words": [
+        {
+          "text": "You're ",
+          "start": 29940,
+          "end": 30280
+        },
+        {
+          "text": "just ",
+          "start": 30280,
+          "end": 30500
+        },
+        {
+          "text": "like ",
+          "start": 30500,
+          "end": 30710
+        },
+        {
+          "text": "an ",
+          "start": 30710,
+          "end": 30920
+        },
+        {
+          "text": "angel",
+          "start": 30920,
+          "end": 32406
+        }
+      ]
+    }
+  ]
+}

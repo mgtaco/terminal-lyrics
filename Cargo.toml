@@ -29,6 +29,11 @@ tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "time", "
 toml = "1.1.4"
 unicode-width = "0.2.2"
 
+# Integration tests drive the async provider chain directly; nothing else in
+# `tests/` needs a runtime, so this is the smallest one that will do.
+[dev-dependencies]
+tokio = { version = "1.53.1", features = ["rt", "macros"] }
+
 # The player backend is chosen at compile time; see src/player/mod.rs. Gating the
 # dependency here is what lets a Linux package build without ever fetching the
 # other platforms' code, and what lets this crate build at all off Linux.

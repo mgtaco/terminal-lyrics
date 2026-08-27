@@ -1,0 +1,24 @@
+{
+  "track": {
+    "cover": {
+      "small": "https://cdn-images.dzcdn.net/images/cover/c3c2e2a739ed501d01791b16a3fd9ad3/56x56-000000-80-0-0.jpg",
+      "medium": "https://cdn-images.dzcdn.net/images/cover/c3c2e2a739ed501d01791b16a3fd9ad3/250x250-000000-80-0-0.jpg",
+      "big": "https://cdn-images.dzcdn.net/images/cover/c3c2e2a739ed501d01791b16a3fd9ad3/500x500-000000-80-0-0.jpg"
+    },
+    "isrc": "GBBPW9800019",
+    "title": "Roygbiv",
+    "artist": "Boards of Canada",
+    "album": "Music Has The Right To Children",
+    "duration": 149
+  },
+  "meta": {
+    "source": {
+      "id": "musixmatch",
+      "name": "Musixmatch",
+      "url": "https://www.musixmatch.com"
+    },
+    "level": "none",
+    "instrumental": true
+  },
+  "lines": []
+}

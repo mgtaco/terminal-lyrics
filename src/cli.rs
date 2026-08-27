@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 
 use crate::config::Sweep;
+use crate::lyrics::Provider;
 
 #[derive(Parser, Debug, Default)]
 #[command(
@@ -37,9 +38,22 @@ pub struct Cli {
     #[arg(long, value_name = "DIR")]
     pub lrc_dir: Option<PathBuf>,
 
-    /// Disable the LRCLIB lookup and use only `--lrc-dir` and the cache.
+    /// Disable every network lookup and use only `--lrc-dir` and the cache.
     #[arg(long)]
     pub no_network: bool,
+
+    /// Lyrics providers to consult, in order, comma-separated.
+    /// Valid names: amll, lyricsplus, lrcmux, lrclib.
+    #[arg(long, value_name = "LIST", value_delimiter = ',', value_parser = parse_provider)]
+    pub providers: Option<Vec<Provider>>,
+
+    /// Base URL of the LyricsPlus instance to query.
+    #[arg(long, value_name = "URL")]
+    pub lyricsplus_url: Option<String>,
+
+    /// Base URL of the lrcmux instance to query.
+    #[arg(long, value_name = "URL")]
+    pub lrcmux_url: Option<String>,
 
     /// Always highlight words as they are sung, even when the timings are
     /// interpolated. By default the highlight appears only for lyrics that
@@ -86,6 +100,12 @@ pub enum Command {
     },
     /// Print the paths this build reads and writes.
     Paths,
+}
+
+/// One canonical provider-name parser, shared with the config file so a typo
+/// gets the same message wherever it is written.
+fn parse_provider(raw: &str) -> Result<Provider, String> {
+    raw.parse()
 }
 
 impl Cli {

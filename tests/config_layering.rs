@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use clap::Parser;
 use terminal_lyrics::cli::Cli;
 use terminal_lyrics::config::{Config, ConfigFile, Sweep};
+use terminal_lyrics::lyrics::Provider;
 
 fn from_args(args: &[&str]) -> Cli {
     let mut full = vec!["lyrics"];
@@ -32,6 +33,9 @@ sweep = "always"
 word_by_word = false
 tick_ms = 77
 resync_threshold_ms = 333
+providers = ["lrcmux", "lrclib"]
+lyricsplus_url = "https://lp.file"
+lrcmux_url = "https://mux.file"
 "#;
 
 #[test]
@@ -43,6 +47,11 @@ fn defaults_apply_with_no_file_and_no_flags() {
     assert!(cfg.network);
     assert_eq!(cfg.sweep, Sweep::Never, "the highlight is opt-in");
     assert!(cfg.word_by_word, "word-timed lyrics show one word at a time");
+    assert_eq!(
+        cfg.providers,
+        Provider::DEFAULT_ORDER.to_vec(),
+        "all four sources, best-looking first"
+    );
 }
 
 #[test]
@@ -58,12 +67,60 @@ fn file_overrides_every_default() {
     assert!(!cfg.word_by_word);
     assert_eq!(cfg.tick_ms, 77);
     assert_eq!(cfg.resync_threshold_ms, 333);
+    assert_eq!(cfg.providers, vec![Provider::LrcMux, Provider::LrcLib]);
+    assert_eq!(cfg.lyricsplus_url, "https://lp.file");
+    assert_eq!(cfg.lrcmux_url, "https://mux.file");
     // Nothing above silently matched the default and passed by luck.
     assert_ne!(cfg.font, d.font);
     assert_ne!(cfg.tick_ms, d.tick_ms);
     assert_ne!(cfg.sweep, d.sweep);
     assert_ne!(cfg.word_by_word, d.word_by_word);
     assert_ne!(cfg.network, d.network);
+    assert_ne!(cfg.providers, d.providers);
+    assert_ne!(cfg.lyricsplus_url, d.lyricsplus_url);
+    assert_ne!(cfg.lrcmux_url, d.lrcmux_url);
+}
+
+#[test]
+fn flag_beats_file_for_the_provider_list() {
+    let cfg = resolve(FULL_FILE, &["--providers", "lrclib,amll"]);
+    assert_eq!(cfg.providers, vec![Provider::LrcLib, Provider::Amll]);
+    // The list is an order, not a set: the flag's order is the one used.
+    assert_ne!(cfg.providers, vec![Provider::Amll, Provider::LrcLib]);
+}
+
+#[test]
+fn flag_beats_file_for_both_provider_urls() {
+    let cfg = resolve(
+        FULL_FILE,
+        &["--lyricsplus-url", "http://lp.flag", "--lrcmux-url", "http://mux.flag"],
+    );
+    assert_eq!(cfg.lyricsplus_url, "http://lp.flag");
+    assert_eq!(cfg.lrcmux_url, "http://mux.flag");
+}
+
+#[test]
+fn an_unknown_provider_name_is_rejected_and_the_valid_ones_are_named() {
+    // A typo'd provider would otherwise be indistinguishable from that
+    // provider simply never having anything to offer.
+    let err = ConfigFile::parse(r#"providers = ["lrclub"]"#)
+        .expect_err("a misspelled provider must not load");
+    // `{:#}` so the TOML parser's own message, which carries ours, is included
+    // rather than just the context line wrapped around it.
+    let full = format!("{err:#}");
+    assert!(full.contains("lrclub"), "the message names the typo: {full}");
+    for valid in ["amll", "lyricsplus", "lrcmux", "lrclib"] {
+        assert!(full.contains(valid), "the message names {valid}: {full}");
+    }
+
+    assert!(Cli::try_parse_from(["lyrics", "--providers", "lrclub"]).is_err());
+}
+
+#[test]
+fn an_empty_provider_list_is_allowed_and_means_no_network_sources() {
+    // Equivalent to --no-network for the lookup, but leaves the cache alone.
+    let cfg = resolve("providers = []", &[]);
+    assert!(cfg.providers.is_empty());
 }
 
 #[test]
