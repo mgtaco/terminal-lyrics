@@ -129,6 +129,23 @@ paths` prints the one this build actually reads. `config.example.toml` lists
 every key. Flags override the file and the file overrides the defaults, with a
 test asserting that ordering field by field.
 
+Colour is the one setting worth explaining here, because the default is to have
+no opinion. The lyrics are drawn in your terminal's own palette entries, so they
+already match whatever scheme it is set to, and there is deliberately no list of
+built-in themes to pick from — that would trade the matching away for a menu.
+What there is instead is a source for one accent:
+
+```bash
+lyrics --color-source pywal            # follow ~/.cache/wal/colors.json
+lyrics --color-source 'fixed:#8a2be2'  # one literal colour
+lyrics --color-source file:PATH        # any palette in pywal's JSON shape
+```
+
+Only the lyric text is repainted; the sweep highlight and the status lines stay
+palette colours, so the display still follows the terminal everywhere else. A
+palette that cannot be read falls back to the terminal rather than refusing to
+start, and `lyrics status` says when that has happened.
+
 ## How it works
 
 **Choosing a player.** Without `--player`, whichever player is actually playing
