@@ -70,11 +70,18 @@ until the trusted publisher is configured.
 
 > **Blocked, not forgotten.** AUR account registration is paused while Arch deals
 > with a wave of automated sign-ups — `HTTP 503`, not something specific to this
-> project or network. It is announced on
+> project or network. It has been closed for a while rather than briefly, and no
+> reopening date has been announced, so treat this as indefinite rather than
+> imminent. It will be announced on
 > [aur-general](https://lists.archlinux.org/mailman3/lists/aur-general.lists.archlinux.org/)
-> and the [Arch news feed](https://archlinux.org/news/) when it lifts; the page
-> asks explicitly that nobody script retries against it, and those lists will say
-> so sooner anyway. Everything below is ready to run the day an account exists.
+> and the [Arch news feed](https://archlinux.org/news/); the page asks explicitly
+> that nobody script retries against it, and those lists will say so sooner
+> anyway.
+>
+> None of this blocks Arch users, and the README says so: `makepkg -si` in
+> `aur-bin/` installs the release binary through pacman without any AUR account.
+> Everything below is what publishing adds, and it is ready to run the day an
+> account exists.
 
 Two packages, both here:
 

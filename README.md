@@ -45,6 +45,17 @@ check a download. The musl build is the one to take on Linux if you are unsure:
 it is statically linked, so it does not care how old your distribution's glibc
 is.
 
+On Arch, `packaging/aur-bin/` is a `PKGBUILD` that installs the release binary
+through pacman, so it uninstalls cleanly like anything else:
+
+```bash
+cd packaging/aur-bin && makepkg -si
+```
+
+It is not on the AUR yet — account registration there is paused while Arch deals
+with a wave of automated sign-ups — but nothing about it needs the AUR, and this
+is the same `PKGBUILD` that will be published when it reopens.
+
 Or from a checkout:
 
 ```bash
