@@ -16,8 +16,8 @@
 //!
 //! Two things are worth knowing about the edge:
 //!
-//! * WinRT wants a multithreaded apartment, and every call below runs on a
-//!   `spawn_blocking` thread that may be a different one each time. See
+//! * WinRT wants a multithreaded apartment, and its async operations complete
+//!   on whichever thread the runtime picks rather than one we control. See
 //!   [`ensure_mta`].
 //! * A WinRT `TimeSpan` counts 100-nanosecond ticks, not milliseconds and not
 //!   seconds. Getting that wrong does not fail — it silently reports a position
@@ -183,11 +183,11 @@ pub fn parse_sessions(raw: &[RawSession]) -> Vec<Probe> {
 
 /// Register the process as a multithreaded apartment.
 ///
-/// WinRT calls need COM initialised on the calling thread, and every call here
-/// runs on a `spawn_blocking` thread that is not guaranteed to be the same one
-/// twice. `CoIncrementMTAUsage` sets the process up once and, unlike
-/// `CoInitializeEx`, has no matching uninit to pair with — which is exactly what
-/// a pool of transient threads needs.
+/// WinRT needs COM initialised, and the calls below resolve on whichever thread
+/// the runtime completes them on rather than one we control.
+/// `CoIncrementMTAUsage` sets the process up once and, unlike `CoInitializeEx`,
+/// has no matching uninit to pair with — which is what suits a process that
+/// never wants to tear the apartment back down.
 fn ensure_mta() {
     static ONCE: Once = Once::new();
     ONCE.call_once(|| {
@@ -199,13 +199,18 @@ fn ensure_mta() {
     });
 }
 
-/// Read every session out of WinRT. Blocking — call it on a blocking thread.
-fn read_sessions() -> Result<Vec<RawSession>> {
+/// Read every session out of WinRT.
+///
+/// WinRT's async operations are futures here, not blocking calls: windows-rs
+/// gives `IAsyncOperation` an `IntoFuture`, and both it and the future it makes
+/// are `Send`, so this awaits on the normal runtime rather than occupying a
+/// blocking thread.
+async fn read_sessions() -> Result<Vec<RawSession>> {
     ensure_mta();
 
     let manager = SmtcManager::RequestAsync()
         .context("the Windows media session manager is unavailable")?
-        .get()
+        .await
         .context("could not open the Windows media session manager")?;
     let sessions = manager
         .GetSessions()
@@ -240,11 +245,11 @@ fn read_sessions() -> Result<Vec<RawSession>> {
         // The media properties are a second async call and the likeliest to
         // fail. A session without them is still a player worth reporting; it
         // just has no track yet.
-        let (title, artist, album) = match session
-            .TryGetMediaPropertiesAsync()
-            .ok()
-            .and_then(|op| op.get().ok())
-        {
+        let props = match session.TryGetMediaPropertiesAsync() {
+            Ok(op) => op.await.ok(),
+            Err(_) => None,
+        };
+        let (title, artist, album) = match props {
             Some(p) => (
                 p.Title().map(|h| h.to_string()).unwrap_or_default(),
                 p.Artist().map(|h| h.to_string()).unwrap_or_default(),
@@ -267,13 +272,13 @@ fn read_sessions() -> Result<Vec<RawSession>> {
     Ok(out)
 }
 
-/// Toggle play/pause on the named session. Blocking.
-fn toggle(name: &str) -> Result<()> {
+/// Toggle play/pause on the named session.
+async fn toggle(name: &str) -> Result<()> {
     ensure_mta();
 
     let manager = SmtcManager::RequestAsync()
         .context("the Windows media session manager is unavailable")?
-        .get()
+        .await
         .context("could not open the Windows media session manager")?;
     let sessions = manager
         .GetSessions()
@@ -290,7 +295,7 @@ fn toggle(name: &str) -> Result<()> {
             session
                 .TryTogglePlayPauseAsync()
                 .context("play/pause was refused")?
-                .get()
+                .await
                 .context("play/pause did not complete")?;
             return Ok(());
         }
@@ -299,12 +304,13 @@ fn toggle(name: &str) -> Result<()> {
     Err(anyhow!("{name} is no longer registered as a media session"))
 }
 
-/// Run one probe on a blocking thread, with a deadline.
+/// Run one probe, with a deadline.
 async fn probe() -> Result<Vec<Probe>> {
-    let raw = tokio::time::timeout(PROBE_TIMEOUT, tokio::task::spawn_blocking(read_sessions))
+    let raw = tokio::time::timeout(PROBE_TIMEOUT, read_sessions())
         .await
-        .map_err(|_| anyhow!("the media session manager did not answer within {PROBE_TIMEOUT:?}"))?
-        .context("reading the media sessions panicked")??;
+        .map_err(|_| {
+            anyhow!("the media session manager did not answer within {PROBE_TIMEOUT:?}")
+        })??;
     Ok(parse_sessions(&raw))
 }
 
@@ -377,10 +383,7 @@ impl PlayerHandle {
     }
 
     pub async fn play_pause(&self) -> Result<()> {
-        let name = self.name.clone();
-        tokio::task::spawn_blocking(move || toggle(&name))
-            .await
-            .context("the play/pause call panicked")?
+        toggle(&self.name).await
     }
 
     /// Spawn the event pump.

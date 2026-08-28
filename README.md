@@ -6,7 +6,7 @@
 
 [![Rust 2024 edition](https://img.shields.io/badge/Rust-2024_edition-B7410E?style=flat-square&logo=rust&logoColor=white)](https://www.rust-lang.org)
 [![MIT licence](https://img.shields.io/github/license/mgtaco/terminal-lyrics?style=flat-square&color=8A2BE2)](LICENSE)
-[![Linux and macOS](https://img.shields.io/badge/Linux_%2B_macOS-MPRIS_%2F_AppleScript-64748B?style=flat-square)](#platforms)
+[![Linux, macOS and Windows](https://img.shields.io/badge/Linux_%2B_macOS_%2B_Windows-MPRIS_%2F_AppleScript_%2F_SMTC-64748B?style=flat-square)](#platforms)
 [![Self-contained binary](https://img.shields.io/badge/binary-self--contained-2EA44F?style=flat-square)](#install)
 [![Four lyrics sources](https://img.shields.io/badge/lyrics-4_synced_sources-0EA5E9?style=flat-square)](#how-it-works)
 [![Code size](https://img.shields.io/github/languages/code-size/mgtaco/terminal-lyrics?style=flat-square&color=64748B)](https://github.com/mgtaco/terminal-lyrics)
@@ -24,6 +24,21 @@ environment to build first.
 
 ## Install
 
+Download a binary from [the latest
+release](https://github.com/mgtaco/terminal-lyrics/releases/latest) — Linux
+(glibc or musl), macOS (Apple silicon or Intel) and Windows:
+
+```bash
+tar -xzf lyrics-*-x86_64-unknown-linux-musl.tar.gz
+mkdir -p ~/.local/bin && install -m755 lyrics-*/lyrics ~/.local/bin/lyrics
+```
+
+Every archive ships a `.sha256` beside it. The musl build is the one to take on
+Linux if you are unsure: it is statically linked, so it does not care how old
+your distribution's glibc is.
+
+Or build it yourself, which needs Rust 1.88 or newer:
+
 ```bash
 cargo build --release
 mkdir -p ~/.local/bin && install -m755 target/release/lyrics ~/.local/bin/lyrics
@@ -32,10 +47,10 @@ mkdir -p ~/.local/bin && install -m755 target/release/lyrics ~/.local/bin/lyrics
 (`install -D` would make the directory for you, but only on Linux: the `-D` that
 macOS ships is a different flag entirely.)
 
-That is the whole install, because the binary is self-contained: it links its
-TLS in statically and talks to your player through whatever the platform already
-provides, so nothing needs installing alongside it. The only shared libraries it
-wants are the C runtime, which is already on your system.
+Either way that is the whole install, because the binary is self-contained: it
+links its TLS in statically and talks to your player through whatever the
+platform already provides, so nothing needs installing alongside it. The only
+shared libraries it wants are the C runtime, which is already on your system.
 
 On macOS the first run raises the standard Automation prompt, because reading
 what Spotify is playing means sending it an Apple event. Allow it once and it
@@ -252,11 +267,12 @@ database is stored under — so the best part of the program survives the crossi
 intact. Neither app is ever launched by this program; one that is not already
 running simply is not listed.
 
-**Windows** is not supported yet. The shape of it is clear — the
-`GlobalSystemMediaTransportControlsSessionManager` API carries title, artist,
-album, status and position — but it would arrive with no Spotify track ID, and so
-no word-by-word lyrics, and nobody here can test it. There is a placeholder
-backend that says so rather than failing obscurely.
+**Windows** reads the System Media Transport Controls — the API behind the media
+flyout in the volume panel — polled like macOS. Like MPRIS and unlike
+AppleScript it discovers players rather than knowing them by name, so anything
+that registers a session can be followed. What it does not carry is a track ID,
+so AMLL is stepped over there; LyricsPlus and lrcmux match on artist and title,
+so word-by-word lyrics still work.
 
 ## Limitations
 
@@ -275,12 +291,14 @@ backend that says so rather than failing obscurely.
 * Anything held by none of the four will not be found, and pressing `r` will not
   conjure it into existence.
 * On Linux, only MPRIS players are visible, so anything that does not expose an
-  MPRIS interface goes unnoticed. On macOS it is narrower still: Spotify and
-  Apple Music, and nothing else. See [Platforms](#platforms).
+  MPRIS interface goes unnoticed. On Windows the equivalent is registering with
+  the media controls. On macOS it is narrower than either: Spotify and Apple
+  Music, and nothing else. See [Platforms](#platforms).
 * macOS needs Automation permission for the player you use. Refuse the prompt and
   the program says so and points at the setting, rather than reporting that
   nothing is playing.
-* Windows is not supported yet.
+* On Windows there is no track ID to key AMLL by, so that source is skipped
+  there. The other three still apply.
 
 ## Credit
 
