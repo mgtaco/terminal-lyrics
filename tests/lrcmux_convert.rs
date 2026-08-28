@@ -66,7 +66,11 @@ fn milliseconds_become_seconds() {
     assert!((line.words[0].start - 19.980).abs() < 1e-6);
     assert!((line.words[0].end - 20.320).abs() < 1e-6);
     // Written as mm:ss.SSS, the same form the TTML converter emits.
-    assert!(found.raw.starts_with("[00:19.980]<00:19.980>When<00:20.320> "));
+    assert!(
+        found
+            .raw
+            .starts_with("[00:19.980]<00:19.980>When<00:20.320> ")
+    );
 }
 
 #[test]
@@ -113,14 +117,20 @@ fn a_whitespace_only_span_becomes_a_separator_not_a_word() {
 #[test]
 fn a_line_level_response_has_no_word_tags() {
     let found = lrcmux::from_response(&fixture("lrcmux_line.json"), None).expect("a hit");
-    assert!(found.synced, "line level is still synced, just not per word");
+    assert!(
+        found.synced,
+        "line level is still synced, just not per word"
+    );
     assert!(!found.lyrics.has_word_timings());
     assert!(
         !found.raw.contains('<'),
         "line-level output must not carry word tags: {:?}",
         found.raw
     );
-    assert_eq!(found.raw, "[00:12.500]First line, no word tags\n[00:15.000]Second line\n");
+    assert_eq!(
+        found.raw,
+        "[00:12.500]First line, no word tags\n[00:15.000]Second line\n"
+    );
     assert_eq!(
         found.source,
         Source::LrcMux {
@@ -140,8 +150,14 @@ fn an_instrumental_answer_is_a_miss_not_an_empty_hit() {
 #[test]
 fn a_different_edit_of_the_song_is_rejected() {
     let resp = fixture("lrcmux_word.json"); // Creep, 238s
-    assert!(lrcmux::from_response(&resp, Some(238.6)).is_some(), "the same edit");
-    assert!(lrcmux::from_response(&resp, Some(242.0)).is_some(), "within 5s");
+    assert!(
+        lrcmux::from_response(&resp, Some(238.6)).is_some(),
+        "the same edit"
+    );
+    assert!(
+        lrcmux::from_response(&resp, Some(242.0)).is_some(),
+        "within 5s"
+    );
     assert!(
         lrcmux::from_response(&resp, Some(323.0)).is_none(),
         "a 323s edit's timings would be wrong from the first line to the last"

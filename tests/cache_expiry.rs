@@ -38,7 +38,12 @@ fn age_by_days(dir: &Path, days: u64) {
         let at = text.find("\"stored_at\":").expect("a stored_at field") + "\"stored_at\":".len();
         let end = at + text[at..].find(',').expect("a field after stored_at");
         let stored: u64 = text[at..end].parse().expect("a timestamp");
-        let aged = format!("{}{}{}", &text[..at], stored - days * 24 * 60 * 60, &text[end..]);
+        let aged = format!(
+            "{}{}{}",
+            &text[..at],
+            stored - days * 24 * 60 * 60,
+            &text[end..]
+        );
         std::fs::write(&path, aged).unwrap();
         found = true;
     }
@@ -95,7 +100,10 @@ fn expiry_is_decided_by_the_lyrics_not_by_a_stored_flag() {
 
     cache.put_hit(KEY, "Radiohead - Creep", WORD_TIMED, None, true);
     age_by_days(&dir, 30);
-    assert!(cache.get(KEY).is_some(), "the same age, kept, because it is word-timed");
+    assert!(
+        cache.get(KEY).is_some(),
+        "the same age, kept, because it is word-timed"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -136,10 +144,19 @@ fn a_document_whose_only_word_tags_are_background_expires_like_a_line_level_one(
     // to pin a line-level answer in the cache for good.
     let dir = scratch("background-only-timings");
     let cache = Cache::new(Some(dir.clone()));
-    cache.put_hit(KEY, "Radiohead - Creep", BACKGROUND_ONLY_TIMINGS, None, true);
+    cache.put_hit(
+        KEY,
+        "Radiohead - Creep",
+        BACKGROUND_ONLY_TIMINGS,
+        None,
+        true,
+    );
 
     let got = cache.get(KEY).expect("cached").expect("a hit");
-    assert!(!got.lyrics.lines[0].secondary.is_empty(), "the voice is there");
+    assert!(
+        !got.lyrics.lines[0].secondary.is_empty(),
+        "the voice is there"
+    );
 
     age_by_days(&dir, 2);
     assert!(cache.get(KEY).is_none(), "and it still expires");

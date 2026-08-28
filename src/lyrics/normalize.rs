@@ -115,7 +115,9 @@ pub fn relax_title(title: &str) -> Option<String> {
 
 /// Artists arrive joined in all sorts of ways; LRCLIB indexes the primary one.
 pub fn primary_artist(artist: &str) -> Option<String> {
-    for sep in [" feat. ", " feat ", " ft. ", " ft ", " & ", ", ", " x ", " with "] {
+    for sep in [
+        " feat. ", " feat ", " ft. ", " ft ", " & ", ", ", " x ", " with ",
+    ] {
         if let Some((head, _)) = artist.split_once(sep) {
             let head = head.trim();
             if !head.is_empty() && !head.eq_ignore_ascii_case(artist.trim()) {

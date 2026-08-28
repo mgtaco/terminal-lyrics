@@ -163,10 +163,7 @@ impl Config {
             } else {
                 file.network.unwrap_or(d.network)
             },
-            sweep: cli
-                .sweep_choice()
-                .or(file.sweep)
-                .unwrap_or(d.sweep),
+            sweep: cli.sweep_choice().or(file.sweep).unwrap_or(d.sweep),
             word_by_word: cli
                 .word_by_word_choice()
                 .or(file.word_by_word)

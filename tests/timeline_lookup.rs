@@ -147,10 +147,20 @@ fn the_highlight_offset_rebases_onto_the_active_word() {
     // Midway through "two" (11.0..11.5): absolute offset sits inside 4..7.
     let abs = t.highlight_chars(0, 11.25);
     let word = t.active_word(0, 11.25).unwrap();
-    assert_eq!(word.range, 4..7, "\"two\" occupies chars 4..7 of \"one two three\"");
+    assert_eq!(
+        word.range,
+        4..7,
+        "\"two\" occupies chars 4..7 of \"one two three\""
+    );
     let relative = abs.saturating_sub(word.range.start);
-    assert!(relative <= 3, "highlight must stay inside the word, got {relative}");
-    assert!(relative >= 1, "and must have advanced into it, got {relative}");
+    assert!(
+        relative <= 3,
+        "highlight must stay inside the word, got {relative}"
+    );
+    assert!(
+        relative >= 1,
+        "and must have advanced into it, got {relative}"
+    );
 }
 
 const SYLLABLES: &str =
@@ -211,7 +221,10 @@ fn a_second_voice_is_offered_only_while_it_is_singing() {
         panic!("the first line is up")
     };
     assert!(t.secondary(index, 11.0).is_none(), "it has not come in yet");
-    assert_eq!(t.secondary(index, 13.0).map(|s| s.text.as_str()), Some("(ooh ooh)"));
+    assert_eq!(
+        t.secondary(index, 13.0).map(|s| s.text.as_str()),
+        Some("(ooh ooh)")
+    );
     assert!(t.secondary(index, 17.0).is_none(), "and it has stopped");
 }
 
@@ -219,15 +232,16 @@ fn a_second_voice_is_offered_only_while_it_is_singing() {
 fn a_very_short_background_phrase_is_held_long_enough_to_read() {
     // Apple times these to the syllable, so "(ooh)" can be a fifth of a second.
     // Drawn and pulled that fast it reads as a flicker rather than a voice.
-    let t = tl(
-        "[00:10.00][end:00:20.00]a line\n\
+    let t = tl("[00:10.00][end:00:20.00]a line\n\
          [00:12.00][bg:00:10.00][end:00:12.20](ooh)\n\
-         [00:20.00]the next line\n",
-    );
+         [00:20.00]the next line\n");
     let Position::Line { index } = t.locate(12.5) else {
         panic!("the line is up")
     };
-    assert!(t.secondary(index, 12.5).is_some(), "still up after its own end");
+    assert!(
+        t.secondary(index, 12.5).is_some(),
+        "still up after its own end"
+    );
     assert!(t.secondary(index, 13.5).is_none(), "but not indefinitely");
 }
 
@@ -241,6 +255,12 @@ fn the_second_voice_never_gets_the_sweep_or_an_active_word() {
     };
     let line = t.line(index).expect("a line");
     assert_eq!(line.text, "first line");
-    assert_eq!(t.highlight_chars(index, 13.0), t.highlight_chars(index, 13.0));
-    assert!(t.active_word(index, 13.0).is_none(), "this line has no word tags");
+    assert_eq!(
+        t.highlight_chars(index, 13.0),
+        t.highlight_chars(index, 13.0)
+    );
+    assert!(
+        t.active_word(index, 13.0).is_none(),
+        "this line has no word tags"
+    );
 }

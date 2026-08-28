@@ -84,7 +84,8 @@ impl SyncEngine {
                 Change::Resynced
             }
             PlayerEvent::Seeked { position } => {
-                self.clock.anchor(position, 1.0, self.clock.is_playing(), now);
+                self.clock
+                    .anchor(position, 1.0, self.clock.is_playing(), now);
                 Change::Resynced
             }
             PlayerEvent::Tick { position, playing } => {

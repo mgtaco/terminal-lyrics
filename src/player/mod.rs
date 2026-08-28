@@ -23,17 +23,17 @@
 
 pub mod fake;
 
-#[cfg(target_os = "linux")]
-pub mod mpris;
 #[cfg(target_os = "macos")]
 pub mod macos;
+#[cfg(target_os = "linux")]
+pub mod mpris;
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
 pub mod unsupported;
 
-#[cfg(target_os = "linux")]
-use mpris as backend;
 #[cfg(target_os = "macos")]
 use macos as backend;
+#[cfg(target_os = "linux")]
+use mpris as backend;
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
 use unsupported as backend;
 
@@ -146,7 +146,9 @@ pub fn match_name(available: &[String], wanted: &str) -> Option<String> {
         .find(|p| p.eq_ignore_ascii_case(wanted))
         .or_else(|| {
             let lower = wanted.to_lowercase();
-            available.iter().find(|p| p.to_lowercase().starts_with(&lower))
+            available
+                .iter()
+                .find(|p| p.to_lowercase().starts_with(&lower))
         })
         .cloned()
 }
@@ -158,7 +160,9 @@ pub fn match_name(available: &[String], wanted: &str) -> Option<String> {
 /// session bus"`, because that part is the only bit that differs.
 pub fn choose(states: Vec<PlayerState>, wanted: Option<&str>, what: &str) -> Result<String> {
     if states.is_empty() {
-        return Err(anyhow!("no {what} is running — start a player and try again"));
+        return Err(anyhow!(
+            "no {what} is running — start a player and try again"
+        ));
     }
     match wanted {
         None => Ok(rank_players(states)
@@ -166,9 +170,8 @@ pub fn choose(states: Vec<PlayerState>, wanted: Option<&str>, what: &str) -> Res
             .expect("a non-empty survey always ranks")),
         Some(w) => {
             let names: Vec<String> = states.into_iter().map(|p| p.name).collect();
-            match_name(&names, w).ok_or_else(|| {
-                anyhow!("no player matching {w:?}; available: {}", names.join(", "))
-            })
+            match_name(&names, w)
+                .ok_or_else(|| anyhow!("no player matching {w:?}; available: {}", names.join(", ")))
         }
     }
 }

@@ -117,7 +117,10 @@ fn every_line_gets_a_finite_end() {
         let l = lrc::parse(&fixture(name));
         for (i, line) in l.lines.iter().enumerate() {
             assert!(line.end.is_finite(), "{name} line {i} has no end");
-            assert!(line.end >= line.start, "{name} line {i} ends before it starts");
+            assert!(
+                line.end >= line.start,
+                "{name} line {i} ends before it starts"
+            );
         }
     }
 }
@@ -134,7 +137,9 @@ fn empty_input_is_empty_not_a_panic() {
 fn a_trailing_word_tag_closes_the_previous_word() {
     // A2 end tags. Without them a real pause between words is invisible and
     // the highlight slides through it.
-    let l = lrc::parse("[00:10.00]<00:10.00>Flashing<00:10.60> <00:11.00>Lights<00:12.50>\n[00:20.00]next\n");
+    let l = lrc::parse(
+        "[00:10.00]<00:10.00>Flashing<00:10.60> <00:11.00>Lights<00:12.50>\n[00:20.00]next\n",
+    );
     let words = &l.lines[0].words;
     assert_eq!(words.len(), 2, "an end tag must not become a word");
     assert_eq!(l.lines[0].text, "Flashing Lights");
@@ -155,7 +160,9 @@ fn words_without_end_tags_still_run_to_the_next_one() {
 fn adjacent_word_tags_are_syllables_of_one_word() {
     // Word-timed sources time a long word in pieces. The pieces are butted
     // straight together in the text; only whitespace separates real words.
-    let l = lrc::parse("[00:10.00]<00:10.00>be<00:10.40>lieve<00:10.90> <00:11.00>it<00:11.40>\n[00:15.00]next\n");
+    let l = lrc::parse(
+        "[00:10.00]<00:10.00>be<00:10.40>lieve<00:10.90> <00:11.00>it<00:11.40>\n[00:15.00]next\n",
+    );
     let line = &l.lines[0];
     assert_eq!(line.text, "believe it");
     assert_eq!(line.words.len(), 3, "three timed spans, two words");
@@ -200,12 +207,19 @@ fn word_ranges_are_measured_after_the_markers() {
     // indexes the text and nothing else. Getting this wrong shifts every
     // highlight by the width of the markers.
     let plain = lrc::parse("[00:10.000]<00:10.000>Hello <00:11.000>world\n");
-    let marked =
-        lrc::parse("[00:10.000][end:00:14.000]<00:10.000>Hello <00:11.000>world\n");
+    let marked = lrc::parse("[00:10.000][end:00:14.000]<00:10.000>Hello <00:11.000>world\n");
     assert_eq!(plain.lines[0].text, marked.lines[0].text);
     assert_eq!(
-        plain.lines[0].words.iter().map(|w| w.range.clone()).collect::<Vec<_>>(),
-        marked.lines[0].words.iter().map(|w| w.range.clone()).collect::<Vec<_>>(),
+        plain.lines[0]
+            .words
+            .iter()
+            .map(|w| w.range.clone())
+            .collect::<Vec<_>>(),
+        marked.lines[0]
+            .words
+            .iter()
+            .map(|w| w.range.clone())
+            .collect::<Vec<_>>(),
     );
     assert_eq!(marked.lines[0].words[1].range, 6..11);
 }
@@ -215,9 +229,8 @@ fn an_overlap_too_short_to_be_a_duet_is_still_sequential() {
     // A third of a second is one line's tail running into the next one's head,
     // which is what most overlap in the wild is. It must read exactly as it did
     // before second voices existed.
-    let l = lrc::parse(
-        "[00:10.000][end:00:14.300]first line\n[00:14.000][end:00:18.000]second line\n",
-    );
+    let l =
+        lrc::parse("[00:10.000][end:00:14.300]first line\n[00:14.000][end:00:18.000]second line\n");
     assert!(l.lines[1].secondary.is_empty());
     assert!((l.lines[0].end - l.lines[1].start).abs() < 0.001);
 }
@@ -247,7 +260,11 @@ fn two_lines_at_the_same_timestamp_do_not_leave_one_unreachable() {
     // The earlier one used to get `end == start`, which no lookup can ever
     // land on, so it was invisible however long you stared at it.
     let l = lrc::parse("[00:10.000]first voice\n[00:10.000]second voice\n[00:20.000]after\n");
-    assert_eq!(l.lines.len(), 2, "the two are one line and its second voice");
+    assert_eq!(
+        l.lines.len(),
+        2,
+        "the two are one line and its second voice"
+    );
     assert_eq!(l.lines[0].text, "second voice");
     assert_eq!(l.lines[0].secondary[0].text, "first voice");
     assert!(l.lines[0].end > l.lines[0].start, "and it has a window");
@@ -257,7 +274,10 @@ fn two_lines_at_the_same_timestamp_do_not_leave_one_unreachable() {
 fn a_repeated_line_at_one_timestamp_is_not_stacked_on_itself() {
     let l = lrc::parse("[00:10.000]same words\n[00:10.000]same words\n[00:20.000]after\n");
     assert_eq!(l.lines.len(), 2);
-    assert!(l.lines[0].secondary.is_empty(), "that is a duplicate, not a duet");
+    assert!(
+        l.lines[0].secondary.is_empty(),
+        "that is a duplicate, not a duet"
+    );
 }
 
 #[test]

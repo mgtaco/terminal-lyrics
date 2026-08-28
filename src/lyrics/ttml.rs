@@ -177,7 +177,12 @@ pub fn to_enhanced_lrc(xml: &str) -> Result<String> {
 
     loop {
         match reader.read_event() {
-            Err(e) => return Err(anyhow!("malformed TTML at byte {}: {e}", reader.buffer_position())),
+            Err(e) => {
+                return Err(anyhow!(
+                    "malformed TTML at byte {}: {e}",
+                    reader.buffer_position()
+                ));
+            }
             Ok(Event::Eof) => break,
 
             // `Empty` is a self-closing tag: it opens and closes at once, so it
@@ -419,7 +424,11 @@ fn local_name(raw: &str) -> &str {
 fn attr(e: &quick_xml::events::BytesStart<'_>, want: &str) -> Option<String> {
     e.attributes().flatten().find_map(|a| {
         (local_name(a.key.as_ref()) == want)
-            .then(|| a.normalized_value(quick_xml::XmlVersion::Implicit1_0).ok().map(|v| v.to_string()))
+            .then(|| {
+                a.normalized_value(quick_xml::XmlVersion::Implicit1_0)
+                    .ok()
+                    .map(|v| v.to_string())
+            })
             .flatten()
     })
 }

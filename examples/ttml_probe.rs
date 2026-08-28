@@ -3,7 +3,9 @@ use terminal_lyrics::lrc;
 use terminal_lyrics::lyrics::ttml;
 
 fn main() -> anyhow::Result<()> {
-    let path = std::env::args().nth(1).expect("usage: ttml_probe <file.ttml>");
+    let path = std::env::args()
+        .nth(1)
+        .expect("usage: ttml_probe <file.ttml>");
     let xml = std::fs::read_to_string(path)?;
     let a2 = ttml::to_enhanced_lrc(&xml)?;
     for line in a2.lines().take(4) {
@@ -19,7 +21,11 @@ fn main() -> anyhow::Result<()> {
                 "      {:.3}..{:.3} {:?}",
                 w.start,
                 w.end,
-                line.text.chars().skip(w.range.start).take(w.range.end - w.range.start).collect::<String>()
+                line.text
+                    .chars()
+                    .skip(w.range.start)
+                    .take(w.range.end - w.range.start)
+                    .collect::<String>()
             );
         }
     }

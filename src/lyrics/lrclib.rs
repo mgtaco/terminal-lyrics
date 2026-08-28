@@ -44,7 +44,11 @@ pub struct Record {
 
 impl Record {
     fn best_text(&self) -> Option<(&str, bool)> {
-        if let Some(s) = self.synced_lyrics.as_deref().filter(|s| !s.trim().is_empty()) {
+        if let Some(s) = self
+            .synced_lyrics
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+        {
             return Some((s, true));
         }
         self.plain_lyrics
@@ -119,8 +123,14 @@ impl LrcLib {
         if resp.status() == reqwest::StatusCode::NOT_FOUND {
             return Ok(None);
         }
-        let resp = resp.error_for_status().context("LRCLIB returned an error")?;
-        Ok(Some(resp.json::<Record>().await.context("bad JSON from LRCLIB")?))
+        let resp = resp
+            .error_for_status()
+            .context("LRCLIB returned an error")?;
+        Ok(Some(
+            resp.json::<Record>()
+                .await
+                .context("bad JSON from LRCLIB")?,
+        ))
     }
 
     async fn search(&self, artist: &str, title: &str) -> Result<Vec<Record>> {
@@ -138,7 +148,12 @@ impl LrcLib {
 }
 
 /// Lower is better. `None` means "reject outright".
-fn score(rec: &Record, want_duration: Option<f64>, want_title: &str, want_artist: &str) -> Option<f64> {
+fn score(
+    rec: &Record,
+    want_duration: Option<f64>,
+    want_title: &str,
+    want_artist: &str,
+) -> Option<f64> {
     rec.best_text()?;
     let mut score = 0.0;
 

@@ -88,7 +88,9 @@ impl Cache {
     }
 
     fn path(&self, key: &str) -> Option<PathBuf> {
-        self.dir.as_ref().map(|d| d.join(format!("{}.json", key_hash(key))))
+        self.dir
+            .as_ref()
+            .map(|d| d.join(format!("{}.json", key_hash(key))))
     }
 
     /// `Some(Some(found))` = hit, `Some(None)` = a remembered miss,
@@ -127,7 +129,14 @@ impl Cache {
         }
     }
 
-    pub fn put_hit(&self, key: &str, label: &str, lrc_text: &str, lrclib_id: Option<i64>, synced: bool) {
+    pub fn put_hit(
+        &self,
+        key: &str,
+        label: &str,
+        lrc_text: &str,
+        lrclib_id: Option<i64>,
+        synced: bool,
+    ) {
         self.write(
             key,
             Entry {

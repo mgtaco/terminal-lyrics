@@ -126,7 +126,9 @@ pub fn track_from_metadata(md: &HashMap<String, OwnedValue>) -> Option<Track> {
         .filter(|s| !s.is_empty());
     // `s` on Spotify, `o` per spec.
     let trackid = md.get("mpris:trackid").and_then(lenient_string);
-    let id = url.or(trackid).unwrap_or_else(|| fallback_id(&artist, &title));
+    let id = url
+        .or(trackid)
+        .unwrap_or_else(|| fallback_id(&artist, &title));
 
     Some(Track {
         id,
@@ -140,7 +142,6 @@ pub fn track_from_metadata(md: &HashMap<String, OwnedValue>) -> Option<Track> {
 fn status_is_playing(s: &str) -> bool {
     s.eq_ignore_ascii_case("playing")
 }
-
 
 /// A connection to the session bus. One per process is plenty.
 pub struct Session {
@@ -198,7 +199,11 @@ impl Session {
     pub async fn resolve(&self, wanted: Option<&str>) -> Result<String> {
         // Accept the fully-qualified bus name as well as the short one.
         let wanted = wanted.map(|w| w.trim().trim_start_matches(MPRIS_PREFIX));
-        super::choose(self.survey().await?, wanted, "MPRIS player on the session bus")
+        super::choose(
+            self.survey().await?,
+            wanted,
+            "MPRIS player on the session bus",
+        )
     }
 
     pub async fn connect(&self, name: &str) -> Result<PlayerHandle> {

@@ -184,7 +184,9 @@ pub async fn fetch(http: &reqwest::Client, base: &str, track: &Track) -> Result<
     if resp.status() == reqwest::StatusCode::NOT_FOUND {
         return Ok(None);
     }
-    let resp = resp.error_for_status().context("lrcmux returned an error")?;
+    let resp = resp
+        .error_for_status()
+        .context("lrcmux returned an error")?;
     let body = resp
         .json::<Response>()
         .await

@@ -24,7 +24,11 @@ impl Font {
     fn build(name: &'static str, height: usize, table: &[(char, &'static [&'static str])]) -> Self {
         let mut glyphs = HashMap::new();
         for (c, rows) in table {
-            debug_assert_eq!(rows.len(), height, "glyph {c:?} in {name} has the wrong height");
+            debug_assert_eq!(
+                rows.len(),
+                height,
+                "glyph {c:?} in {name} has the wrong height"
+            );
             glyphs.insert(*c, rows.to_vec());
         }
         let space = glyphs

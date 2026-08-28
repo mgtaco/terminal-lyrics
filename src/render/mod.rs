@@ -73,7 +73,13 @@ pub enum Screen<'a> {
 }
 
 /// Render a screen into styled text sized for `width` x `height`.
-pub fn render(screen: &Screen<'_>, font: &Font, width: u16, height: u16, theme: Theme) -> Text<'static> {
+pub fn render(
+    screen: &Screen<'_>,
+    font: &Font,
+    width: u16,
+    height: u16,
+    theme: Theme,
+) -> Text<'static> {
     let width = width as usize;
     let height = height as usize;
 
@@ -122,7 +128,9 @@ pub fn render(screen: &Screen<'_>, font: &Font, width: u16, height: u16, theme: 
             ));
             vertically_centre(rows, height)
         }
-        Screen::Searching { label } => status_text(label, "searching for lyrics", width, height, theme),
+        Screen::Searching { label } => {
+            status_text(label, "searching for lyrics", width, height, theme)
+        }
         Screen::NoLyrics { label } => status_text(label, "no lyrics found", width, height, theme),
         Screen::Idle { message } => status_text("", message, width, height, theme),
     }
@@ -264,7 +272,13 @@ fn pad_to(s: &str, width: usize) -> String {
     }
 }
 
-fn status_text(label: &str, message: &str, width: usize, height: usize, theme: Theme) -> Text<'static> {
+fn status_text(
+    label: &str,
+    message: &str,
+    width: usize,
+    height: usize,
+    theme: Theme,
+) -> Text<'static> {
     let mut rows: Vec<Line<'static>> = Vec::new();
     if !label.is_empty() {
         rows.push(centred(label, width, Style::default().fg(theme.unsung)));

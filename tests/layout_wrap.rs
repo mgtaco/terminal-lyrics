@@ -58,11 +58,7 @@ fn wrapping_prefers_word_boundaries() {
     // and the break must fall between them rather than mid-word.
     let l = layout("hello world", &f, 10);
     assert_eq!(l.lines.len(), 2);
-    let first: String = l.lines[0]
-        .cells
-        .iter()
-        .map(|c| c.rows[0].clone())
-        .collect();
+    let first: String = l.lines[0].cells.iter().map(|c| c.rows[0].clone()).collect();
     assert_eq!(first.trim(), "hello");
 }
 
@@ -100,7 +96,12 @@ fn the_font_steps_down_before_anything_is_lost() {
     // shorter font rather than clip the glyphs.
     let block = font::block();
     let (l, used) = layout_fitting("HELLO THERE", &block, 40, 4, LINE_GAP);
-    assert!(used.height <= 4, "chose {} with height {}", used.name, used.height);
+    assert!(
+        used.height <= 4,
+        "chose {} with height {}",
+        used.name,
+        used.height
+    );
     assert!(l.rows(LINE_GAP) <= 4);
     assert_no_loss("HELLO THERE", &l);
 }
@@ -129,11 +130,7 @@ fn rendering_fills_exactly_the_area_it_was_given() {
     );
     assert!(text.lines.len() <= 24, "overflowed the viewport");
     for line in &text.lines {
-        let w: usize = line
-            .spans
-            .iter()
-            .map(|s| s.content.chars().count())
-            .sum();
+        let w: usize = line.spans.iter().map(|s| s.content.chars().count()).sum();
         assert!(w <= 80, "line is {w} columns wide, viewport is 80");
     }
 }
@@ -313,7 +310,10 @@ fn the_second_voice_is_drawn_above_the_main_line() {
         .iter()
         .position(|(_, c)| c.contains(&Theme::default().unsung))
         .expect("the line is on screen");
-    assert!(first_dim < first_lit, "the second voice sits above the line");
+    assert!(
+        first_dim < first_lit,
+        "the second voice sits above the line"
+    );
 }
 
 #[test]
@@ -334,7 +334,10 @@ fn a_background_voice_is_dimmed_and_a_size_smaller() {
     );
     let rows = inked(&out);
     let dim = rows.iter().filter(|(_, c)| c.contains(&theme.dim)).count();
-    let lit = rows.iter().filter(|(_, c)| c.contains(&theme.unsung)).count();
+    let lit = rows
+        .iter()
+        .filter(|(_, c)| c.contains(&theme.unsung))
+        .count();
     assert_eq!(lit, 5, "the line is block art");
     assert_eq!(dim, 3, "the backing vocal is a size down, in compact");
 }
@@ -390,8 +393,14 @@ fn both_voices_step_down_together_before_either_is_dropped() {
         rows.iter().any(|(_, c)| c.contains(&theme.dim)),
         "the second voice is still there"
     );
-    let lit = rows.iter().filter(|(_, c)| c.contains(&theme.unsung)).count();
-    assert!(lit < 5, "the line stepped down to make room, got {lit} rows");
+    let lit = rows
+        .iter()
+        .filter(|(_, c)| c.contains(&theme.unsung))
+        .count();
+    assert!(
+        lit < 5,
+        "the line stepped down to make room, got {lit} rows"
+    );
 }
 
 #[test]

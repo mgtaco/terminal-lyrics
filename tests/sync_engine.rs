@@ -219,7 +219,11 @@ fn a_scripted_session_ends_where_the_arithmetic_says_it_should() {
 
     // 62s at resume, plus 4s of playback afterwards.
     let end = t0 + Duration::from_millis(24_000);
-    assert!((e.lyric_position(end) - 66.0).abs() < 0.01, "got {}", e.lyric_position(end));
+    assert!(
+        (e.lyric_position(end) - 66.0).abs() < 0.01,
+        "got {}",
+        e.lyric_position(end)
+    );
 }
 
 #[test]

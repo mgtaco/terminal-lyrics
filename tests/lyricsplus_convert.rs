@@ -15,7 +15,10 @@ fn ttml_fixture() -> String {
     );
     let text = std::fs::read_to_string(path).expect("fixture missing");
     let v: serde_json::Value = serde_json::from_str(&text).unwrap();
-    v["ttml"].as_str().expect("envelope has a ttml string").to_string()
+    v["ttml"]
+        .as_str()
+        .expect("envelope has a ttml string")
+        .to_string()
 }
 
 #[test]
@@ -54,7 +57,10 @@ fn the_documents_own_duration_rejects_a_different_edit() {
 
     assert!(lyricsplus::from_ttml(&xml, Some(238.6)).is_some());
     assert!(lyricsplus::from_ttml(&xml, Some(300.0)).is_none());
-    assert!(lyricsplus::from_ttml(&xml, None).is_some(), "no length, no opinion");
+    assert!(
+        lyricsplus::from_ttml(&xml, None).is_some(),
+        "no length, no opinion"
+    );
 }
 
 #[test]

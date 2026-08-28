@@ -157,7 +157,11 @@ end try
 }
 
 fn parse_ms(field: &str) -> Option<f64> {
-    field.trim().parse::<i64>().ok().map(|ms| ms as f64 / 1000.0)
+    field
+        .trim()
+        .parse::<i64>()
+        .ok()
+        .map(|ms| ms as f64 / 1000.0)
 }
 
 /// Turn the probe's output into one [`Probe`] per line.
@@ -317,7 +321,10 @@ impl Session {
     pub async fn connect(&self, name: &str) -> Result<PlayerHandle> {
         let app = app_by_name(name).ok_or_else(|| {
             let known: Vec<&str> = APPS.iter().map(|a| a.name).collect();
-            anyhow!("{name:?} is not scriptable here; known players: {}", known.join(", "))
+            anyhow!(
+                "{name:?} is not scriptable here; known players: {}",
+                known.join(", ")
+            )
         })?;
         Ok(PlayerHandle { app })
     }

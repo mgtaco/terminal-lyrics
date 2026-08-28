@@ -31,10 +31,7 @@ pub fn spotify_track_id(key: &str) -> Option<&str> {
         key
     };
     // Trim a query string or trailing path segment.
-    let candidate = candidate
-        .split(['?', '#', '/'])
-        .next()
-        .unwrap_or_default();
+    let candidate = candidate.split(['?', '#', '/']).next().unwrap_or_default();
 
     // Spotify IDs are 22 base62 characters. Checking this keeps a filename or a
     // free-text key from becoming a request for a URL that cannot exist.
@@ -46,17 +43,16 @@ pub fn spotify_track_id(key: &str) -> Option<&str> {
 /// database simply does not have this track, which is the common case.
 pub async fn fetch(http: &reqwest::Client, spotify_id: &str) -> Result<Option<Found>> {
     let url = format!("{BASE}/{spotify_id}.ttml");
-    let resp = http
-        .get(&url)
-        .send()
-        .await
-        .context("AMLL request failed")?;
+    let resp = http.get(&url).send().await.context("AMLL request failed")?;
 
     if resp.status() == reqwest::StatusCode::NOT_FOUND {
         return Ok(None);
     }
     let resp = resp.error_for_status().context("AMLL returned an error")?;
-    let xml = resp.text().await.context("could not read the AMLL response")?;
+    let xml = resp
+        .text()
+        .await
+        .context("could not read the AMLL response")?;
 
     // A malformed entry should fall through to LRCLIB, not fail the lookup.
     let Ok(a2) = ttml::to_enhanced_lrc(&xml) else {

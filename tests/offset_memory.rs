@@ -80,7 +80,11 @@ fn the_nudge_survives_a_restart() {
     // A second run, reading the same file from scratch.
     let mut next = app_with(&path, Config::default());
     play(&mut next, "song-a");
-    assert_eq!(next.offset_ms(), 400, "read back from disk, not from memory");
+    assert_eq!(
+        next.offset_ms(),
+        400,
+        "read back from disk, not from memory"
+    );
 
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }

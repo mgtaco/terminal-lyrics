@@ -10,13 +10,15 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use futures_lite::StreamExt as _;
 use ratatui::DefaultTerminal;
-use ratatui::crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use ratatui::crossterm::event::{
+    Event, EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers,
+};
 use ratatui::widgets::Paragraph;
 use tokio::sync::mpsc;
 
 use crate::config::Config;
-use crate::lyrics::cache::Cache;
 use crate::lyrics::Net;
+use crate::lyrics::cache::Cache;
 use crate::lyrics::{Outcome, Source};
 use crate::offsets::Offsets;
 use crate::player::{EventRx, PlayerEvent, PlayerHandle, Track};
@@ -111,7 +113,11 @@ impl App {
     /// not. Called on every track change, which is what stops a correction
     /// made for one song from following you into the next.
     pub fn adopt_track_offset(&mut self) {
-        let key = self.engine.track().map(|t| t.id.clone()).unwrap_or_default();
+        let key = self
+            .engine
+            .track()
+            .map(|t| t.id.clone())
+            .unwrap_or_default();
         let offset = self.offsets.offset_for(&key, self.cfg.offset_ms);
         self.engine.clock_mut().set_offset_ms(offset);
     }
@@ -270,11 +276,7 @@ fn draw(terminal: &mut DefaultTerminal, app: &App) -> Result<()> {
         let now = Instant::now();
         let pos = app.engine.lyric_position(now);
 
-        let label = app
-            .engine
-            .track()
-            .map(Track::label)
-            .unwrap_or_default();
+        let label = app.engine.track().map(Track::label).unwrap_or_default();
 
         // Held so the borrow lives as long as `screen`.
         let mut line_text = String::new();
@@ -290,7 +292,9 @@ fn draw(terminal: &mut DefaultTerminal, app: &App) -> Result<()> {
             LyricState::Searching => Screen::Searching { label: &label },
             LyricState::Missing => Screen::NoLyrics { label: &label },
             LyricState::Ready {
-                timeline, word_timed, ..
+                timeline,
+                word_timed,
+                ..
             } => match timeline.locate(pos) {
                 Position::Line { index } => {
                     if let Some(line) = timeline.line(index) {

@@ -63,7 +63,14 @@ fn the_spotify_id_survives_intact_and_is_a_valid_amll_key() {
 #[test]
 fn a_music_row_keeps_its_persistent_id_as_the_cache_key() {
     let out = parse_probe(&row(&[
-        "music", "playing", "1000", "180000", "A1B2C3D4E5F60718", "Title", "Artist", "Album",
+        "music",
+        "playing",
+        "1000",
+        "180000",
+        "A1B2C3D4E5F60718",
+        "Title",
+        "Artist",
+        "Album",
     ]));
     let track = out[0].result.as_ref().unwrap().track.as_ref().unwrap();
     assert_eq!(track.id, "A1B2C3D4E5F60718");
@@ -113,10 +120,20 @@ fn a_duration_of_zero_is_absent_rather_than_a_zero_length_track() {
 #[test]
 fn a_track_with_no_id_falls_back_to_artist_and_title() {
     let out = parse_probe(&row(&[
-        "music", "playing", "0", "180000", "", "Creep", "Radiohead", "Pablo Honey",
+        "music",
+        "playing",
+        "0",
+        "180000",
+        "",
+        "Creep",
+        "Radiohead",
+        "Pablo Honey",
     ]));
     let track = out[0].result.as_ref().unwrap().track.as_ref().unwrap();
-    assert_eq!(track.id, terminal_lyrics::player::fallback_id("Radiohead", "Creep"));
+    assert_eq!(
+        track.id,
+        terminal_lyrics::player::fallback_id("Radiohead", "Creep")
+    );
 }
 
 #[test]
@@ -132,7 +149,10 @@ fn titles_keep_the_punctuation_and_non_ascii_they_arrive_with() {
         "メカクシティレコーズ",
     ]));
     let track = out[0].result.as_ref().unwrap().track.as_ref().unwrap();
-    assert_eq!(track.title, "サマータイムレコード (feat. someone) — 2011 Remaster");
+    assert_eq!(
+        track.title,
+        "サマータイムレコード (feat. someone) — 2011 Remaster"
+    );
     assert_eq!(track.artist, "じん");
 }
 
@@ -188,9 +208,7 @@ fn a_refused_automation_prompt_is_told_apart_from_a_missing_app() {
 fn both_players_are_read_from_one_probe() {
     let text = format!(
         "{}\n{}",
-        row(&[
-            "spotify", "playing", "1000", "233000", "sid", "A", "B", "C"
-        ]),
+        row(&["spotify", "playing", "1000", "233000", "sid", "A", "B", "C"]),
         row(&["music", "paused", "2000", "180000", "mid", "D", "E", "F"]),
     );
     let out = parse_probe(&text);

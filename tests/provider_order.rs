@@ -135,7 +135,11 @@ async fn a_provider_being_down_does_not_cost_the_lower_tier_answer() {
     ]);
     let found = chain(&fake, &DEFAULT).await.unwrap().expect("a hit");
     assert_eq!(found.source, Source::LrcLib { id: 1 });
-    assert_eq!(fake.calls(), DEFAULT.to_vec(), "every provider was still asked");
+    assert_eq!(
+        fake.calls(),
+        DEFAULT.to_vec(),
+        "every provider was still asked"
+    );
 }
 
 #[tokio::test]
@@ -164,7 +168,10 @@ async fn everything_failing_is_reported_as_a_failure_not_a_miss() {
 async fn the_configured_order_is_obeyed_and_omitted_providers_are_skipped() {
     // `providers = ["lrcmux", "lrclib"]` is how a provider is turned off.
     let order = [Provider::LrcMux, Provider::LrcLib];
-    let fake = Fake::new(&[(Provider::Amll, Answer::Hit), (Provider::LrcLib, Answer::Hit)]);
+    let fake = Fake::new(&[
+        (Provider::Amll, Answer::Hit),
+        (Provider::LrcLib, Answer::Hit),
+    ]);
     let found = chain(&fake, &order).await.unwrap().expect("a hit");
     assert_eq!(found.source, Source::LrcLib { id: 1 });
     assert_eq!(fake.calls(), order.to_vec(), "amll was configured away");
@@ -214,7 +221,12 @@ async fn a_line_level_answer_does_not_stop_the_chain() {
         (Provider::LrcMux, Answer::Hit),
     ]);
     let found = chain(&fake, &DEFAULT).await.unwrap().expect("a hit");
-    assert_eq!(found.source, Source::LrcMux { provider: "musixmatch".to_string() });
+    assert_eq!(
+        found.source,
+        Source::LrcMux {
+            provider: "musixmatch".to_string()
+        }
+    );
     assert!(found.lyrics.has_word_timings());
     assert_eq!(
         fake.calls(),
@@ -232,7 +244,11 @@ async fn a_line_level_answer_is_still_returned_when_nothing_better_exists() {
     let found = chain(&fake, &DEFAULT).await.unwrap().expect("the fallback");
     assert_eq!(found.source, Source::LyricsPlus);
     assert!(!found.lyrics.has_word_timings());
-    assert_eq!(fake.calls(), DEFAULT.to_vec(), "everyone was asked before settling");
+    assert_eq!(
+        fake.calls(),
+        DEFAULT.to_vec(),
+        "everyone was asked before settling"
+    );
 }
 
 #[tokio::test]

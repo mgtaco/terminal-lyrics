@@ -64,7 +64,12 @@ fn records_with_no_usable_text_are_never_chosen() {
     empty.plain_lyrics = None;
     empty.synced_lyrics = None;
     let results = vec![empty, rec(2, "Song", "Artist", 201.0, true)];
-    assert_eq!(pick_best(results, Some(200.0), "Song", "Artist").unwrap().id, 2);
+    assert_eq!(
+        pick_best(results, Some(200.0), "Song", "Artist")
+            .unwrap()
+            .id,
+        2
+    );
 }
 
 #[test]
@@ -118,7 +123,10 @@ fn the_cache_round_trips_timestamps_not_plain_text() {
     let raw = "[00:10.00]first line\n[00:20.00]second line\n";
     cache.put_hit("track-key", "Artist — Title", raw, Some(42), true);
 
-    let hit = cache.get("track-key").expect("should be cached").expect("should be a hit");
+    let hit = cache
+        .get("track-key")
+        .expect("should be cached")
+        .expect("should be a hit");
     assert!(hit.synced);
     assert_eq!(hit.lyrics.lines.len(), 2);
     assert_eq!(hit.lyrics.lines[0].start, 10.0);

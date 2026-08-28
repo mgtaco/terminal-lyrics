@@ -200,10 +200,7 @@ pub fn parse_clock(body: &str) -> Option<f64> {
         return None;
     }
     let normalised = rest.replace(',', ".");
-    if !normalised
-        .chars()
-        .all(|c| c.is_ascii_digit() || c == '.')
-    {
+    if !normalised.chars().all(|c| c.is_ascii_digit() || c == '.') {
         return None;
     }
     let s: f64 = normalised.parse().ok()?;

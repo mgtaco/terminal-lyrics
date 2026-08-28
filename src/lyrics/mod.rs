@@ -59,7 +59,9 @@ pub const LRCMUX_URL: &str = "https://api.lrcmux.dev";
 pub enum Source {
     LocalFile(PathBuf),
     Cache,
-    LrcLib { id: i64 },
+    LrcLib {
+        id: i64,
+    },
     /// The AMLL TTML database — syllable-timed, keyed by Spotify ID.
     Amll,
     /// LyricsPlus, serving Apple Music's syllable-timed TTML.
@@ -67,7 +69,9 @@ pub enum Source {
     /// lrcmux, carrying the id of whichever upstream actually answered —
     /// worth showing, because "the lyrics are junk" and "musixmatch is
     /// returning junk" are different problems.
-    LrcMux { provider: String },
+    LrcMux {
+        provider: String,
+    },
 }
 
 impl std::fmt::Display for Source {
@@ -179,9 +183,7 @@ impl Provider {
 
     /// For the error message below, and for `--help`.
     pub fn names() -> String {
-        Provider::DEFAULT_ORDER
-            .map(Provider::name)
-            .join(", ")
+        Provider::DEFAULT_ORDER.map(Provider::name).join(", ")
     }
 }
 
@@ -196,7 +198,12 @@ impl std::str::FromStr for Provider {
             // Naming the valid ones matters more here than usual: this is a
             // typo in a config file, and an ignored one would look like the
             // provider was simply never reached.
-            .ok_or_else(|| format!("unknown provider `{s}`; valid names are {}", Provider::names()))
+            .ok_or_else(|| {
+                format!(
+                    "unknown provider `{s}`; valid names are {}",
+                    Provider::names()
+                )
+            })
     }
 }
 
@@ -315,7 +322,9 @@ pub async fn first_hit(
                 }
                 answered = true;
                 if fallback.is_none() {
-                    debug(&format!("{provider} answered line-level; looking for better"));
+                    debug(&format!(
+                        "{provider} answered line-level; looking for better"
+                    ));
                     fallback = Some(found);
                 }
             }

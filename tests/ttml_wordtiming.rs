@@ -85,7 +85,10 @@ fn a_background_wrapper_with_no_times_takes_them_from_its_spans() {
     let parsed = lrc::parse(&ttml::to_enhanced_lrc(&fixture("duet_bg.ttml")).unwrap());
     let second = &parsed.lines[1].secondary[0];
     assert_eq!(second.text, "(ooh)");
-    assert!((second.start - 21.0).abs() < 0.001, "start came from the span");
+    assert!(
+        (second.start - 21.0).abs() < 0.001,
+        "start came from the span"
+    );
     assert!((second.end - 22.0).abs() < 0.001, "end came from the span");
 }
 
@@ -218,7 +221,10 @@ fn spotify_ids_are_recognised_in_every_form_the_players_use() {
         spotify_track_id("https://open.spotify.com/track/5TRPicyLGbAF2LGBFbHGvO?si=abc123"),
         Some(want)
     );
-    assert_eq!(spotify_track_id("spotify:track:5TRPicyLGbAF2LGBFbHGvO"), Some(want));
+    assert_eq!(
+        spotify_track_id("spotify:track:5TRPicyLGbAF2LGBFbHGvO"),
+        Some(want)
+    );
     assert_eq!(spotify_track_id(want), Some(want));
 }
 

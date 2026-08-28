@@ -47,8 +47,14 @@ fn defaults_apply_with_no_file_and_no_flags() {
     assert_eq!(cfg.offset_ms, 0);
     assert!(cfg.network);
     assert_eq!(cfg.sweep, Sweep::Never, "the highlight is opt-in");
-    assert!(cfg.word_by_word, "word-timed lyrics show one word at a time");
-    assert!(cfg.overlapping_voices, "two voices at once are stacked, not hidden");
+    assert!(
+        cfg.word_by_word,
+        "word-timed lyrics show one word at a time"
+    );
+    assert!(
+        cfg.overlapping_voices,
+        "two voices at once are stacked, not hidden"
+    );
     assert_eq!(
         cfg.providers,
         Provider::DEFAULT_ORDER.to_vec(),
@@ -97,7 +103,12 @@ fn flag_beats_file_for_the_provider_list() {
 fn flag_beats_file_for_both_provider_urls() {
     let cfg = resolve(
         FULL_FILE,
-        &["--lyricsplus-url", "http://lp.flag", "--lrcmux-url", "http://mux.flag"],
+        &[
+            "--lyricsplus-url",
+            "http://lp.flag",
+            "--lrcmux-url",
+            "http://mux.flag",
+        ],
     );
     assert_eq!(cfg.lyricsplus_url, "http://lp.flag");
     assert_eq!(cfg.lrcmux_url, "http://mux.flag");
@@ -112,7 +123,10 @@ fn an_unknown_provider_name_is_rejected_and_the_valid_ones_are_named() {
     // `{:#}` so the TOML parser's own message, which carries ours, is included
     // rather than just the context line wrapped around it.
     let full = format!("{err:#}");
-    assert!(full.contains("lrclub"), "the message names the typo: {full}");
+    assert!(
+        full.contains("lrclub"),
+        "the message names the typo: {full}"
+    );
     for valid in ["amll", "lyricsplus", "lrcmux", "lrclib"] {
         assert!(full.contains(valid), "the message names {valid}: {full}");
     }
@@ -163,7 +177,10 @@ fn no_network_flag_wins_and_its_absence_defers_to_the_file() {
 #[test]
 fn sweep_flags_override_the_file() {
     // Flag on top of a file that says never.
-    assert_eq!(resolve(r#"sweep = "never""#, &["--sweep"]).sweep, Sweep::Always);
+    assert_eq!(
+        resolve(r#"sweep = "never""#, &["--sweep"]).sweep,
+        Sweep::Always
+    );
     // Flag on top of a file that says always.
     assert_eq!(
         resolve(r#"sweep = "always""#, &["--no-sweep"]).sweep,
@@ -210,11 +227,20 @@ fn word_by_word_flags_override_the_file() {
 #[test]
 fn overlapping_voice_flags_override_the_file() {
     let on = |c: terminal_lyrics::config::Config| c.overlapping_voices;
-    assert!(on(resolve("overlapping_voices = false", &["--overlapping-voices"])));
-    assert!(!on(resolve("overlapping_voices = true", &["--single-voice"])));
+    assert!(on(resolve(
+        "overlapping_voices = false",
+        &["--overlapping-voices"]
+    )));
+    assert!(!on(resolve(
+        "overlapping_voices = true",
+        &["--single-voice"]
+    )));
     assert!(!on(resolve("overlapping_voices = false", &[])));
     // Last flag wins.
-    assert!(!on(resolve("", &["--overlapping-voices", "--single-voice"])));
+    assert!(!on(resolve(
+        "",
+        &["--overlapping-voices", "--single-voice"]
+    )));
     assert!(on(resolve("", &["--single-voice", "--overlapping-voices"])));
 }
 
