@@ -189,14 +189,14 @@ pub fn parse_sessions(raw: &[RawSession]) -> Vec<Probe> {
 /// `CoIncrementMTAUsage` sets the process up once and, unlike `CoInitializeEx`,
 /// has no matching uninit to pair with — which is what suits a process that
 /// never wants to tear the apartment back down.
+///
+/// The cookie it returns is only an argument for `CoDecrementMTAUsage`, which
+/// is never called here. It is `Copy` and so carries no destructor, meaning
+/// dropping it does nothing and the apartment stays up regardless.
 fn ensure_mta() {
     static ONCE: Once = Once::new();
     ONCE.call_once(|| {
-        // The cookie is what holds the MTA open; dropping it would end it, so
-        // it is deliberately leaked for the life of the process.
-        if let Ok(cookie) = unsafe { CoIncrementMTAUsage() } {
-            std::mem::forget(cookie);
-        }
+        let _ = unsafe { CoIncrementMTAUsage() };
     });
 }
 

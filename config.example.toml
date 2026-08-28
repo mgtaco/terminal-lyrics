@@ -55,7 +55,8 @@ overlapping_voices = true
 # Where the accent colour comes from. The default paints nothing itself: the
 # display is drawn in your terminal's own palette entries, so it already follows
 # whatever colour scheme the terminal is set to. Naming a source here repaints
-# only the sung half of the line; the rest stays with the terminal.
+# the lyric text and nothing else: the sweep highlight and the status lines stay
+# terminal palette colours.
 #
 #   terminal        the terminal's palette, untouched (default)
 #   pywal           ~/.cache/wal/colors.json, as written by pywal

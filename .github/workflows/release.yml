@@ -71,7 +71,6 @@ jobs:
       # familiar download there, but `tar` has shipped in Windows since 10 and
       # one archive format means one code path — worth more than the convention.
       - name: Package
-        id: package
         shell: bash
         run: |
           set -euo pipefail

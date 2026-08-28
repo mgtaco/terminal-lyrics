@@ -7,6 +7,9 @@ pub mod font;
 pub mod layout;
 
 use ratatui::style::{Color, Modifier, Style};
+// `Theme`'s fields are `Color`, so callers outside the crate need the type to
+// say anything about them.
+pub use ratatui::style::Color as ThemeColor;
 use ratatui::text::{Line, Span, Text};
 
 use self::font::Font;
@@ -39,17 +42,23 @@ impl Default for Theme {
 }
 
 impl Theme {
-    /// The default theme, with the sung text repainted in `accent`.
+    /// The default theme, with the lyric text repainted in `accent`.
     ///
-    /// Only `sung` moves. `unsung` and `dim` stay palette entries, so even with
-    /// an accent set the bulk of the screen still follows the terminal's own
-    /// scheme — which is the property the default was chosen for and the one a
-    /// list of hardcoded themes would have cost.
+    /// `unsung` is the slot that moves, and it has to be that one: `sung` is
+    /// only reached where the sweep has passed, and the sweep is off by default
+    /// (`Sweep::Never`), so an accent applied to `sung` would be a setting that
+    /// parses, prints back, and never changes a pixel. `unsung` is what a line
+    /// is drawn in almost all of the time.
+    ///
+    /// `sung` and `dim` stay palette entries, so the highlight and the status
+    /// text still follow the terminal's own scheme — which is the property the
+    /// default was chosen for, and the one a list of hardcoded themes would
+    /// have cost.
     pub fn with_accent(accent: Option<[u8; 3]>) -> Self {
         match accent {
             None => Self::default(),
             Some([r, g, b]) => Self {
-                sung: Color::Rgb(r, g, b),
+                unsung: Color::Rgb(r, g, b),
                 ..Self::default()
             },
         }

@@ -7,7 +7,7 @@
 use std::path::PathBuf;
 
 use terminal_lyrics::config::{ColorSource, accent_from_palette, parse_hex};
-use terminal_lyrics::render::Theme;
+use terminal_lyrics::render::{Theme, ThemeColor};
 
 #[test]
 fn the_default_is_the_terminals_own_palette() {
@@ -17,13 +17,16 @@ fn the_default_is_the_terminals_own_palette() {
 }
 
 #[test]
-fn an_accent_repaints_only_the_sung_text() {
+fn an_accent_repaints_only_the_lyric_text() {
     let d = Theme::default();
     let themed = Theme::with_accent(Some([0xff, 0x66, 0x00]));
-    assert_ne!(themed.sung, d.sung, "the accent should reach the sung text");
-    assert_eq!(
+    assert_ne!(
         themed.unsung, d.unsung,
-        "the bulk of the screen stays a palette colour"
+        "the accent belongs on the slot a line is actually drawn in"
+    );
+    assert_eq!(
+        themed.sung, d.sung,
+        "the sweep highlight stays a palette colour"
     );
     assert_eq!(themed.dim, d.dim, "so does the dimmed text");
 }
@@ -142,6 +145,60 @@ fn the_label_round_trips_through_the_parser() {
             label.parse::<ColorSource>(),
             Ok(source.clone()),
             "{label} should parse back to what printed it"
+        );
+    }
+}
+
+/// Every foreground colour actually used to draw a screen.
+fn colours_drawn(screen: &terminal_lyrics::render::Screen<'_>, theme: Theme) -> Vec<ThemeColor> {
+    let f = terminal_lyrics::render::font::block();
+    let mut out: Vec<ThemeColor> = terminal_lyrics::render::render(screen, &f, 80, 24, theme)
+        .lines
+        .iter()
+        .flat_map(|l| l.spans.iter())
+        // Blank padding carries no colour worth counting.
+        .filter(|s| !s.content.trim().is_empty())
+        .filter_map(|s| s.style.fg)
+        .collect();
+    out.sort_by_key(|c| format!("{c:?}"));
+    out.dedup();
+    out
+}
+
+#[test]
+fn the_accent_is_visible_with_the_sweep_off() {
+    // The trap this exists for: `highlight` is 0 unless `sweep` applies, and
+    // `sweep` defaults to "never" — so a line is drawn entirely in `unsung`
+    // almost all of the time. An accent that only touched `sung` would be a
+    // setting that parses, prints back, and changes nothing on screen.
+    let accent = [0x8a, 0x2b, 0xe2];
+    let screen = terminal_lyrics::render::Screen::Lyric {
+        text: "HELLO",
+        highlight: 0,
+        reveal: 5,
+        second: None,
+    };
+    let drawn = colours_drawn(&screen, Theme::with_accent(Some(accent)));
+    assert!(
+        drawn.contains(&ThemeColor::Rgb(accent[0], accent[1], accent[2])),
+        "the accent never reached the screen; drew {drawn:?}"
+    );
+}
+
+#[test]
+fn without_an_accent_the_line_is_still_a_palette_colour() {
+    // The default must keep following the terminal's own scheme, so nothing
+    // drawn may be a fixed RGB value.
+    let screen = terminal_lyrics::render::Screen::Lyric {
+        text: "HELLO",
+        highlight: 0,
+        reveal: 5,
+        second: None,
+    };
+    for colour in colours_drawn(&screen, Theme::default()) {
+        assert!(
+            !matches!(colour, ThemeColor::Rgb(..)),
+            "{colour:?} is a fixed colour, not a palette entry"
         );
     }
 }

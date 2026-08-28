@@ -20,7 +20,8 @@ use crate::lyrics::{LRCMUX_URL, LYRICSPLUS_URL, Provider};
 /// terminal palette entries rather than fixed RGB precisely so the display
 /// follows whatever scheme the terminal is set to, and a list of hardcoded
 /// themes would throw that away. What this adds instead is a *source* for one
-/// accent — the sung half of the line — leaving the rest of the palette alone.
+/// accent — the colour a lyric line is drawn in — leaving the rest of the
+/// palette alone.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(try_from = "String")]
 pub enum ColorSource {
@@ -44,7 +45,7 @@ impl ColorSource {
         }
     }
 
-    /// The accent to paint the sung text in, or `None` to leave the terminal
+    /// The accent to paint the lyric text in, or `None` to leave the terminal
     /// palette alone.
     ///
     /// A palette that cannot be read falls back to `None` rather than failing:
