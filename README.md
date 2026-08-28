@@ -4,6 +4,7 @@
 
 **Giant block lyrics in your terminal, synced to whatever is playing.**
 
+[![crates.io](https://img.shields.io/crates/v/terminal-lyrics?style=flat-square&color=B7410E&logo=rust&logoColor=white)](https://crates.io/crates/terminal-lyrics)
 [![Rust 2024 edition](https://img.shields.io/badge/Rust-2024_edition-B7410E?style=flat-square&logo=rust&logoColor=white)](https://www.rust-lang.org)
 [![MIT licence](https://img.shields.io/github/license/mgtaco/terminal-lyrics?style=flat-square&color=8A2BE2)](LICENSE)
 [![Linux, macOS and Windows](https://img.shields.io/badge/Linux_%2B_macOS_%2B_Windows-MPRIS_%2F_AppleScript_%2F_SMTC-64748B?style=flat-square)](#platforms)
@@ -24,7 +25,13 @@ environment to build first.
 
 ## Install
 
-Download a binary from [the latest
+With a Rust toolchain (1.88 or newer):
+
+```bash
+cargo install terminal-lyrics
+```
+
+Without one, download a binary from [the latest
 release](https://github.com/mgtaco/terminal-lyrics/releases/latest) — Linux
 (glibc or musl), macOS (Apple silicon or Intel) and Windows:
 
@@ -38,7 +45,7 @@ check a download. The musl build is the one to take on Linux if you are unsure:
 it is statically linked, so it does not care how old your distribution's glibc
 is.
 
-Or build it yourself, which needs Rust 1.88 or newer:
+Or from a checkout:
 
 ```bash
 cargo build --release
@@ -48,7 +55,7 @@ mkdir -p ~/.local/bin && install -m755 target/release/lyrics ~/.local/bin/lyrics
 (`install -D` would make the directory for you, but only on Linux: the `-D` that
 macOS ships is a different flag entirely.)
 
-Either way that is the whole install, because the binary is self-contained: it
+Any of those is the whole install, because the binary is self-contained: it
 links its TLS in statically and talks to your player through whatever the
 platform already provides, so nothing needs installing alongside it. The only
 shared libraries it wants are the C runtime, which is already on your system.

@@ -29,17 +29,52 @@ of it needs credentials this repository does not carry.
 
 ## crates.io
 
+Published: <https://crates.io/crates/terminal-lyrics>. `cargo install
+terminal-lyrics` is the toolchain install route.
+
 ```bash
-cargo publish --dry-run   # no credentials needed; run this first
-cargo login               # once, with a token from crates.io/settings/tokens
-cargo publish
+cargo publish --dry-run   # no credentials needed; run this before every release
+cargo publish             # with CARGO_REGISTRY_TOKEN set
 ```
 
-`cargo install terminal-lyrics` works once this lands. The manifest already
-carries everything crates.io requires, and `rust-version` is 1.88 — the floor
-`ratatui` 0.30 imposes, not the 1.85 that edition 2024 would suggest.
+The manifest carries everything crates.io requires, and `rust-version` is 1.88 —
+the floor `ratatui` 0.30 imposes, not the 1.85 that edition 2024 would suggest.
+
+### Switch this to Trusted Publishing
+
+The crate exists now, which is the precondition: crates.io cannot hold a trusted
+publisher in a pending state before a crate's first publish, so the first one had
+to use an API token. That token has done its job and should be revoked.
+
+Configure a trusted publisher on the crate's settings page — owner `mgtaco`,
+repository `terminal-lyrics`, workflow `release.yml` — then a release can
+authenticate over OIDC with a credential that lasts under an hour and is revoked
+when the job ends, with no stored secret:
+
+```yaml
+permissions:
+  id-token: write
+  contents: write
+steps:
+  - uses: rust-lang/crates-io-auth-action@v1
+    id: auth
+  - run: cargo publish
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+```
+
+This is not wired into `release.yml` yet, because the job would fail on every tag
+until the trusted publisher is configured.
 
 ## AUR
+
+> **Blocked, not forgotten.** AUR account registration is paused while Arch deals
+> with a wave of automated sign-ups — `HTTP 503`, not something specific to this
+> project or network. It is announced on
+> [aur-general](https://lists.archlinux.org/mailman3/lists/aur-general.lists.archlinux.org/)
+> and the [Arch news feed](https://archlinux.org/news/) when it lifts; the page
+> asks explicitly that nobody script retries against it, and those lists will say
+> so sooner anyway. Everything below is ready to run the day an account exists.
 
 Two packages, both here:
 
