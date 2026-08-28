@@ -1,0 +1,54 @@
+# Maintainer: mgtaco <https://github.com/mgtaco>
+#
+# Builds from `main`. For a released binary with no toolchain needed, see
+# `terminal-lyrics-bin`.
+pkgname=terminal-lyrics-git
+pkgver=0.0.0.r0.0000000
+pkgrel=1
+pkgdesc="Giant block lyrics in your terminal, synced to whatever is playing (git)"
+arch=('x86_64' 'aarch64')
+url="https://github.com/mgtaco/terminal-lyrics"
+license=('MIT')
+depends=('gcc-libs')
+# `cmake` and a C compiler are for aws-lc-sys, which rustls pulls in and which
+# builds BoringSSL from source.
+makedepends=('git' 'cargo' 'cmake')
+provides=('terminal-lyrics')
+conflicts=('terminal-lyrics' 'terminal-lyrics-bin')
+source=("${pkgname}::git+${url}.git")
+sha256sums=('SKIP')
+
+pkgver() {
+    cd "${pkgname}"
+    git describe --long --tags --abbrev=7 2>/dev/null |
+        sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g' ||
+        printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+}
+
+prepare() {
+    cd "${pkgname}"
+    export RUSTUP_TOOLCHAIN=stable
+    cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+    cd "${pkgname}"
+    export RUSTUP_TOOLCHAIN=stable
+    export CARGO_TARGET_DIR=target
+    cargo build --frozen --release
+}
+
+check() {
+    cd "${pkgname}"
+    export RUSTUP_TOOLCHAIN=stable
+    cargo test --frozen
+}
+
+package() {
+    cd "${pkgname}"
+    install -Dm755 target/release/lyrics "${pkgdir}/usr/bin/lyrics"
+    install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+    install -Dm644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+    install -Dm644 config.example.toml \
+        "${pkgdir}/usr/share/doc/${pkgname}/config.example.toml"
+}
