@@ -2,8 +2,16 @@
 name = "terminal-lyrics"
 version = "0.1.1"
 edition = "2024"
-description = "Giant ASCII block lyrics in your terminal, synced to whatever MPRIS player is running"
+description = "Giant block lyrics in your terminal, synced to whatever is playing"
 license = "MIT"
+repository = "https://github.com/mgtaco/terminal-lyrics"
+homepage = "https://github.com/mgtaco/terminal-lyrics"
+readme = "README.md"
+keywords = ["lyrics", "terminal", "tui", "mpris", "music"]
+categories = ["command-line-utilities", "multimedia::audio"]
+# Not the edition 2024 floor (1.85) but the highest any dependency asks for:
+# `ratatui` 0.30 wants 1.88, so nothing older can build this at all.
+rust-version = "1.88"
 
 [lib]
 name = "terminal_lyrics"
