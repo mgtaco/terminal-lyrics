@@ -11,6 +11,9 @@
 
 3. `.github/workflows/release.yml` builds five targets and attaches each archive
    plus a `.sha256` to a GitHub Release. Watch it with `gh run watch`.
+4. Once it lands, point `packaging/aur-bin/PKGBUILD` at the new version and
+   paste in the published `x86_64-unknown-linux-gnu` checksum, so the packaging
+   in this repository always matches the newest release.
 
 That is the whole release. Everything below is publishing it elsewhere, and all
 of it needs credentials this repository does not carry.
@@ -43,10 +46,6 @@ git clone ssh://aur@aur.archlinux.org/terminal-lyrics-bin.git
 cp packaging/aur-bin/PKGBUILD terminal-lyrics-bin/
 cd terminal-lyrics-bin
 
-# -bin only: point at the new version and take its checksum from the release.
-sed -i 's/^pkgver=.*/pkgver=0.2.0/' PKGBUILD
-updpkgsums
-
 makepkg --printsrcinfo > .SRCINFO   # must be regenerated whenever PKGBUILD changes
 makepkg -si                          # build it once and check it actually runs
 namcap PKGBUILD *.pkg.tar.zst        # optional but catches the usual mistakes
@@ -56,9 +55,12 @@ git commit -m "Update to 0.2.0"
 git push
 ```
 
-Both `PKGBUILD`s carry `pkgver=0.0.0` as a placeholder rather than a stale real
-version, so an un-updated one fails loudly instead of quietly packaging an old
-release. `.SRCINFO` is deliberately not committed here: `makepkg` generates it,
+`aur-bin/PKGBUILD` tracks the current release and carries its real checksum, so
+it can be copied and built as-is; bumping it is part of cutting a release rather
+than something to remember at publish time. `aur-git/PKGBUILD` has no version to
+track — `pkgver()` derives it from `git describe`.
+
+`.SRCINFO` is deliberately not committed here: `makepkg` generates it,
 it must match the `PKGBUILD` exactly, and the AUR rejects a push where it does
 not — so it is generated on the machine that publishes, which is also the only
 machine that can verify the package builds at all.
