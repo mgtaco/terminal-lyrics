@@ -9,11 +9,20 @@
    git tag v0.2.0 && git push origin v0.2.0
    ```
 
-3. `.github/workflows/release.yml` builds five targets and attaches each archive
-   plus a `.sha256` to a GitHub Release. Watch it with `gh run watch`.
+3. `.github/workflows/release.yml` builds five targets and attaches the archives
+   to a GitHub Release. Watch it with `gh run watch`.
 4. Once it lands, point `packaging/aur-bin/PKGBUILD` at the new version and
-   paste in the published `x86_64-unknown-linux-gnu` checksum, so the packaging
-   in this repository always matches the newest release.
+   refresh its checksum, so the packaging in this repository always matches the
+   newest release:
+
+   ```bash
+   gh release view v0.2.0 --json assets \
+     --jq '.assets[] | select(.name|endswith("linux-gnu.tar.gz")) | .digest'
+   ```
+
+   That digest is GitHub's own, computed when it received the file. No checksum
+   files are published alongside the archives: a sidecar written by the same job
+   that built the archive would only repeat this, less trustworthily.
 
 That is the whole release. Everything below is publishing it elsewhere, and all
 of it needs credentials this repository does not carry.

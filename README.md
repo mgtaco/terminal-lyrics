@@ -33,9 +33,10 @@ tar -xzf lyrics-*-x86_64-unknown-linux-musl.tar.gz
 mkdir -p ~/.local/bin && install -m755 lyrics-*/lyrics ~/.local/bin/lyrics
 ```
 
-Every archive ships a `.sha256` beside it. The musl build is the one to take on
-Linux if you are unsure: it is statically linked, so it does not care how old
-your distribution's glibc is.
+GitHub shows a SHA-256 next to each archive on the release page if you want to
+check a download. The musl build is the one to take on Linux if you are unsure:
+it is statically linked, so it does not care how old your distribution's glibc
+is.
 
 Or build it yourself, which needs Rust 1.88 or newer:
 

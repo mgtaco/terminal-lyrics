@@ -17,8 +17,8 @@ conflicts=('terminal-lyrics' 'terminal-lyrics-git')
 options=('!strip')
 _dist="lyrics-${pkgver}-x86_64-unknown-linux-gnu"
 source=("${_dist}.tar.gz::${url}/releases/download/v${pkgver}/${_dist}.tar.gz")
-# Taken from the .sha256 the release publishes next to the archive; `updpkgsums`
-# regenerates it after a version bump.
+# GitHub's own digest for the release asset, which `gh release view --json assets`
+# prints; `updpkgsums` recomputes it locally after a version bump.
 sha256sums=('1b9715948ded3a070be489e05c99b94018359cbdad8f2a0214a8a23e7b2e7fd5')
 
 package() {
