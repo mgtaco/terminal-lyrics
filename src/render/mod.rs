@@ -38,6 +38,24 @@ impl Default for Theme {
     }
 }
 
+impl Theme {
+    /// The default theme, with the sung text repainted in `accent`.
+    ///
+    /// Only `sung` moves. `unsung` and `dim` stay palette entries, so even with
+    /// an accent set the bulk of the screen still follows the terminal's own
+    /// scheme — which is the property the default was chosen for and the one a
+    /// list of hardcoded themes would have cost.
+    pub fn with_accent(accent: Option<[u8; 3]>) -> Self {
+        match accent {
+            None => Self::default(),
+            Some([r, g, b]) => Self {
+                sung: Color::Rgb(r, g, b),
+                ..Self::default()
+            },
+        }
+    }
+}
+
 /// A second voice on screen alongside the line being read.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SecondVoice<'a> {

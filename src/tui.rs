@@ -79,6 +79,10 @@ pub struct App {
 impl App {
     pub fn new(cfg: Config, offsets: Offsets, now: Instant) -> Self {
         let font = font::by_name(&cfg.font).unwrap_or_else(font::block);
+        // Read once at startup rather than per frame: a palette on disk is not
+        // going to change mid-song, and the draw loop should not touch the
+        // filesystem.
+        let theme = Theme::with_accent(cfg.color_source.accent());
         let engine = SyncEngine::new(
             cfg.offset_ms,
             Duration::from_millis(cfg.resync_threshold_ms),
@@ -90,7 +94,7 @@ impl App {
             offsets,
             state: LyricState::Idle,
             font,
-            theme: Theme::default(),
+            theme,
             notice: None,
             should_quit: false,
         }

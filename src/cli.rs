@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
-use crate::config::Sweep;
+use crate::config::{ColorSource, Sweep};
 use crate::lyrics::Provider;
 
 #[derive(Parser, Debug, Default)]
@@ -54,6 +54,12 @@ pub struct Cli {
     /// Base URL of the lrcmux instance to query.
     #[arg(long, value_name = "URL")]
     pub lrcmux_url: Option<String>,
+
+    /// Where the accent colour comes from: `terminal` (the default, which
+    /// follows your terminal's own scheme), `pywal`, `fixed:#rrggbb`, or
+    /// `file:PATH` to read any pywal-shaped palette.
+    #[arg(long, value_name = "SOURCE", value_parser = parse_color_source)]
+    pub color_source: Option<ColorSource>,
 
     /// Always highlight words as they are sung, even when the timings are
     /// interpolated. By default the highlight appears only for lyrics that
@@ -115,6 +121,12 @@ pub enum Command {
 /// One canonical provider-name parser, shared with the config file so a typo
 /// gets the same message wherever it is written.
 fn parse_provider(raw: &str) -> Result<Provider, String> {
+    raw.parse()
+}
+
+/// Same idea for the colour source: one parser, so `--color-source` and the
+/// config key reject the same things with the same message.
+fn parse_color_source(raw: &str) -> Result<ColorSource, String> {
     raw.parse()
 }
 

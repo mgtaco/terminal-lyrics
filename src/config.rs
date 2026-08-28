@@ -14,6 +14,118 @@ use serde::Deserialize;
 use crate::cli::Cli;
 use crate::lyrics::{LRCMUX_URL, LYRICSPLUS_URL, Provider};
 
+/// Where the accent colour comes from.
+///
+/// The default is deliberately not a colour at all. `Theme` is built from
+/// terminal palette entries rather than fixed RGB precisely so the display
+/// follows whatever scheme the terminal is set to, and a list of hardcoded
+/// themes would throw that away. What this adds instead is a *source* for one
+/// accent — the sung half of the line — leaving the rest of the palette alone.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "String")]
+pub enum ColorSource {
+    /// The terminal's own palette, untouched.
+    Terminal,
+    /// A literal colour, `fixed:#rrggbb`.
+    Fixed([u8; 3]),
+    /// `~/.cache/wal/colors.json`, as written by pywal.
+    Pywal,
+    /// Any file in that same JSON shape, `file:PATH`.
+    File(PathBuf),
+}
+
+impl ColorSource {
+    pub fn label(&self) -> String {
+        match self {
+            ColorSource::Terminal => "terminal".to_string(),
+            ColorSource::Fixed([r, g, b]) => format!("fixed:#{r:02x}{g:02x}{b:02x}"),
+            ColorSource::Pywal => "pywal".to_string(),
+            ColorSource::File(p) => format!("file:{}", p.display()),
+        }
+    }
+
+    /// The accent to paint the sung text in, or `None` to leave the terminal
+    /// palette alone.
+    ///
+    /// A palette that cannot be read falls back to `None` rather than failing:
+    /// a malformed *spec* is the user's typo and is rejected at parse time, but
+    /// a missing `colors.json` just means pywal has not run yet, and refusing to
+    /// start over it would be a poor trade.
+    pub fn accent(&self) -> Option<[u8; 3]> {
+        match self {
+            ColorSource::Terminal => None,
+            ColorSource::Fixed(rgb) => Some(*rgb),
+            ColorSource::Pywal => {
+                // The user's own cache directory, not this program's: pywal
+                // writes to `~/.cache/wal/` and knows nothing about us.
+                let base = directories::BaseDirs::new()?;
+                let path = base.cache_dir().join("wal").join("colors.json");
+                accent_from_palette(&std::fs::read_to_string(path).ok()?)
+            }
+            ColorSource::File(path) => accent_from_palette(&std::fs::read_to_string(path).ok()?),
+        }
+    }
+}
+
+/// `#rrggbb`, or the same without the hash.
+pub fn parse_hex(raw: &str) -> std::result::Result<[u8; 3], String> {
+    let hex = raw.trim().strip_prefix('#').unwrap_or(raw.trim());
+    if hex.len() != 6 || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(format!("`{raw}` is not a #rrggbb colour"));
+    }
+    let byte = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).expect("checked hex digits above");
+    Ok([byte(0), byte(2), byte(4)])
+}
+
+/// Pull the accent out of a pywal-shaped palette.
+///
+/// `color4` is pywal's own accent slot — the one its templates use for
+/// highlights — so taking it is what makes `--color-source pywal` match the rest
+/// of a themed desktop rather than merely being tinted by it.
+pub fn accent_from_palette(text: &str) -> Option<[u8; 3]> {
+    let value: serde_json::Value = serde_json::from_str(text).ok()?;
+    let hex = value.get("colors")?.get("color4")?.as_str()?;
+    parse_hex(hex).ok()
+}
+
+impl std::str::FromStr for ColorSource {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, String> {
+        let raw = s.trim();
+        let lower = raw.to_ascii_lowercase();
+        match lower.as_str() {
+            "terminal" => return Ok(ColorSource::Terminal),
+            "pywal" => return Ok(ColorSource::Pywal),
+            _ => {}
+        }
+        if let Some(rest) = raw.strip_prefix("fixed:") {
+            return parse_hex(rest).map(ColorSource::Fixed);
+        }
+        if let Some(rest) = raw.strip_prefix("file:") {
+            let path = rest.trim();
+            if path.is_empty() {
+                return Err("`file:` needs a path after it".to_string());
+            }
+            return Ok(ColorSource::File(PathBuf::from(path)));
+        }
+        // Same reasoning as an unknown provider name: a silently ignored typo
+        // here would look exactly like the colour source not working.
+        Err(format!(
+            "unknown colour source `{s}`; expected terminal, pywal, \
+             fixed:#rrggbb or file:PATH"
+        ))
+    }
+}
+
+impl TryFrom<String> for ColorSource {
+    type Error = String;
+
+    fn try_from(s: String) -> std::result::Result<Self, String> {
+        s.parse()
+    }
+}
+
 /// When to highlight individual words as they are sung.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -69,6 +181,8 @@ pub struct Config {
     pub lrc_dir: Option<PathBuf>,
     pub network: bool,
     pub sweep: Sweep,
+    /// Where the accent colour comes from. `Terminal` leaves the palette alone.
+    pub color_source: ColorSource,
     /// Show one word at a time when the lyrics carry real word timings.
     /// Ignored for line-level sources, which have nothing to split on.
     pub word_by_word: bool,
@@ -100,6 +214,7 @@ impl Default for Config {
             lrc_dir: None,
             network: true,
             sweep: Sweep::Never,
+            color_source: ColorSource::Terminal,
             word_by_word: true,
             overlapping_voices: true,
             tick_ms: 30,
@@ -121,6 +236,7 @@ pub struct ConfigFile {
     pub lrc_dir: Option<PathBuf>,
     pub network: Option<bool>,
     pub sweep: Option<Sweep>,
+    pub color_source: Option<ColorSource>,
     pub word_by_word: Option<bool>,
     pub overlapping_voices: Option<bool>,
     pub tick_ms: Option<u64>,
@@ -164,6 +280,11 @@ impl Config {
                 file.network.unwrap_or(d.network)
             },
             sweep: cli.sweep_choice().or(file.sweep).unwrap_or(d.sweep),
+            color_source: cli
+                .color_source
+                .clone()
+                .or(file.color_source)
+                .unwrap_or(d.color_source),
             word_by_word: cli
                 .word_by_word_choice()
                 .or(file.word_by_word)

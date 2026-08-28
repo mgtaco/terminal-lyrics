@@ -9,7 +9,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use terminal_lyrics::cli::Cli;
-use terminal_lyrics::config::{Config, ConfigFile, Sweep};
+use terminal_lyrics::config::{ColorSource, Config, ConfigFile, Sweep};
 use terminal_lyrics::lyrics::Provider;
 
 fn from_args(args: &[&str]) -> Cli {
@@ -30,6 +30,7 @@ offset_ms = 111
 lrc_dir = "/file/lrc"
 network = false
 sweep = "always"
+color_source = "fixed:#ff6600"
 word_by_word = false
 overlapping_voices = false
 tick_ms = 77
@@ -47,6 +48,11 @@ fn defaults_apply_with_no_file_and_no_flags() {
     assert_eq!(cfg.offset_ms, 0);
     assert!(cfg.network);
     assert_eq!(cfg.sweep, Sweep::Never, "the highlight is opt-in");
+    assert_eq!(
+        cfg.color_source,
+        ColorSource::Terminal,
+        "the palette follows the terminal until told otherwise"
+    );
     assert!(
         cfg.word_by_word,
         "word-timed lyrics show one word at a time"
@@ -72,6 +78,7 @@ fn file_overrides_every_default() {
     assert_eq!(cfg.lrc_dir, Some(PathBuf::from("/file/lrc")));
     assert!(!cfg.network);
     assert_eq!(cfg.sweep, Sweep::Always);
+    assert_eq!(cfg.color_source, ColorSource::Fixed([0xff, 0x66, 0x00]));
     assert!(!cfg.word_by_word);
     assert!(!cfg.overlapping_voices);
     assert_eq!(cfg.tick_ms, 77);
@@ -83,6 +90,7 @@ fn file_overrides_every_default() {
     assert_ne!(cfg.font, d.font);
     assert_ne!(cfg.tick_ms, d.tick_ms);
     assert_ne!(cfg.sweep, d.sweep);
+    assert_ne!(cfg.color_source, d.color_source);
     assert_ne!(cfg.word_by_word, d.word_by_word);
     assert_ne!(cfg.overlapping_voices, d.overlapping_voices);
     assert_ne!(cfg.network, d.network);
@@ -280,4 +288,30 @@ fn a_partial_file_leaves_other_fields_at_their_defaults() {
     assert_eq!(cfg.font, "compact");
     assert_eq!(cfg.offset_ms, Config::default().offset_ms);
     assert_eq!(cfg.tick_ms, Config::default().tick_ms);
+}
+
+#[test]
+fn flag_beats_file_for_the_colour_source() {
+    assert_eq!(
+        resolve(
+            r#"color_source = "pywal""#,
+            &["--color-source", "fixed:#00ff00"]
+        )
+        .color_source,
+        ColorSource::Fixed([0x00, 0xff, 0x00])
+    );
+    // And with no flag the file still wins over the default.
+    assert_eq!(
+        resolve(r#"color_source = "pywal""#, &[]).color_source,
+        ColorSource::Pywal
+    );
+}
+
+#[test]
+fn an_unknown_colour_source_is_rejected_by_the_config_file_too() {
+    // The flag and the file share one parser, so a typo fails the same way in
+    // both rather than being silently ignored in one of them.
+    assert!(ConfigFile::parse(r#"color_source = "pywall""#).is_err());
+    assert!(ConfigFile::parse(r#"color_source = "fixed:#zzz""#).is_err());
+    assert!(ConfigFile::parse("color_source = 4").is_err());
 }

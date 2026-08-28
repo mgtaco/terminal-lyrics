@@ -52,6 +52,21 @@ word_by_word = true
 # one line at a time, whichever came in most recently. The `v` key toggles it.
 overlapping_voices = true
 
+# Where the accent colour comes from. The default paints nothing itself: the
+# display is drawn in your terminal's own palette entries, so it already follows
+# whatever colour scheme the terminal is set to. Naming a source here repaints
+# only the sung half of the line; the rest stays with the terminal.
+#
+#   terminal        the terminal's palette, untouched (default)
+#   pywal           ~/.cache/wal/colors.json, as written by pywal
+#   fixed:#rrggbb   a literal colour
+#   file:PATH       any file in pywal's JSON shape
+#
+# A palette that cannot be read — pywal has never run, the path is wrong — falls
+# back to the terminal rather than refusing to start. A misspelt source is an
+# error, because that is a typo rather than a missing file.
+color_source = "terminal"
+
 # When to highlight the sung part of what is on screen.
 #   "never"  — no highlight (default)
 #   "auto"   — only when the lyrics carry real per-word timestamps
