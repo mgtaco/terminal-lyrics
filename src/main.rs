@@ -6,7 +6,7 @@ use anyhow::Result;
 use clap::Parser;
 
 use terminal_lyrics::cli::{Cli, Command};
-use terminal_lyrics::config::{self, Config, ConfigFile};
+use terminal_lyrics::config::{self, ColorSource, Config, ConfigFile};
 use terminal_lyrics::lyrics::cache::Cache;
 use terminal_lyrics::lyrics::{self, Net, Outcome, Source};
 use terminal_lyrics::offsets::Offsets;
@@ -210,6 +210,18 @@ async fn cmd_status(cfg: &Config) -> Result<()> {
                 .map(|p| p.name())
                 .collect::<Vec<_>>()
                 .join(" -> ")
+        }
+    );
+    println!(
+        "colour    {}{}",
+        cfg.color_source.label(),
+        // A source that resolves to nothing has fallen back to the terminal
+        // palette — pywal never ran, or the path is wrong. Worth saying, since
+        // the alternative is wondering why the colour did not change.
+        match (&cfg.color_source, cfg.color_source.accent()) {
+            (ColorSource::Terminal, _) => String::new(),
+            (_, Some([r, g, b])) => format!("  (accent #{r:02x}{g:02x}{b:02x})"),
+            (_, None) => "  (unreadable — using the terminal palette)".to_string(),
         }
     );
 
