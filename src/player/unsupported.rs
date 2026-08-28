@@ -4,17 +4,10 @@
 //! layer everywhere, so that adding a real backend is a new module and nothing
 //! else. If this ever runs, it says so plainly rather than failing obscurely.
 //!
-//! # Windows
-//!
-//! The backend to write is `Windows.Media.Control`'s
-//! `GlobalSystemMediaTransportControlsSessionManager`, which the `windows` crate
-//! exposes. It supplies title, artist, album, playback status and a timeline
-//! position, so `Snapshot` maps onto it cleanly, and `SourceAppUserModelId`
-//! gives the player name. What it does not supply is a Spotify track ID, so
-//! Windows would be LRCLIB line-level only — the word-by-word AMLL path needs
-//! that ID and there is nowhere else to get it. Polling it on the same interval
-//! as macOS is the simplest shape; the events it exposes are an optimisation,
-//! not a requirement.
+//! Linux, macOS and Windows all have one now, so what is left here is the BSDs,
+//! and whatever else Rust targets. On a BSD the answer is almost certainly
+//! [`super::mpris`] as it stands — MPRIS is a freedesktop specification, not a
+//! Linux one — so the work is widening a `cfg`, not writing a module.
 
 use std::time::Duration;
 
@@ -25,7 +18,7 @@ use super::{EventRx, PlayerState, Snapshot, Track};
 fn unsupported<T>() -> Result<T> {
     Err(anyhow!(
         "no player backend for this platform yet — terminal-lyrics supports \
-         Linux (MPRIS) and macOS (Spotify and Music)"
+         Linux (MPRIS), macOS (Spotify and Music) and Windows (media controls)"
     ))
 }
 

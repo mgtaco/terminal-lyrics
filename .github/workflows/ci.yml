@@ -47,20 +47,25 @@ jobs:
       - name: Test
         run: cargo test
 
-  # Windows has no backend yet — `src/player/unsupported.rs` is what compiles
-  # here, so today this job proves very little. It is wired up now because the
-  # moment a real backend lands it becomes the only automated check that the
-  # crate still builds off Linux and macOS, which is exactly the breakage a
-  # platform-gated module invites. Promote it to `cargo test` then.
-  windows-check:
-    name: check (windows-latest)
+  # Windows cannot be folded into the matrix above: the SMTC backend is the one
+  # platform whose code nobody here can run by hand, so this job is the only
+  # thing standing between `src/player/windows.rs` and silent rot. It runs the
+  # tests rather than a bare check, because `tests/windows_probe.rs` is
+  # `#![cfg(target_os = "windows")]` and this is the only place it executes.
+  windows:
+    name: test (windows-latest)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Check
-        run: cargo check --all-targets
+      - name: Lint
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test

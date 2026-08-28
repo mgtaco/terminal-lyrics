@@ -34,6 +34,8 @@ jobs:
             os: macos-latest
           - target: x86_64-apple-darwin
             os: macos-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
 
     steps:
       - uses: actions/checkout@v4
@@ -64,18 +66,34 @@ jobs:
 
       # `[profile.release]` already sets `strip = true`, so the binary that comes
       # out of the build is the one to ship.
+      #
+      # Everything is a .tar.gz, Windows included. A .zip would be the more
+      # familiar download there, but `tar` has shipped in Windows since 10 and
+      # one archive format means one code path — worth more than the convention.
       - name: Package
         id: package
         shell: bash
         run: |
+          set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
           name="lyrics-${version}-${{ matrix.target }}"
+          bin="lyrics${{ matrix.target == 'x86_64-pc-windows-msvc' && '.exe' || '' }}"
+
+          # macOS ships `shasum` and not `sha256sum`; Git Bash on the Windows
+          # runner is the other way round. Ubuntu has both.
+          sha256() {
+            if command -v sha256sum >/dev/null 2>&1; then
+              sha256sum "$1" | awk '{print $1}'
+            else
+              shasum -a 256 "$1" | awk '{print $1}'
+            fi
+          }
+
           mkdir -p "dist/${name}"
-          cp target/${{ matrix.target }}/release/lyrics "dist/${name}/"
+          cp "target/${{ matrix.target }}/release/${bin}" "dist/${name}/"
           cp README.md LICENSE config.example.toml "dist/${name}/"
           tar -czf "dist/${name}.tar.gz" -C dist "${name}"
-          shasum -a 256 "dist/${name}.tar.gz" | awk '{print $1}' > "dist/${name}.tar.gz.sha256"
-          echo "archive=dist/${name}.tar.gz" >> "$GITHUB_OUTPUT"
+          sha256 "dist/${name}.tar.gz" > "dist/${name}.tar.gz.sha256"
 
       - uses: actions/upload-artifact@v4
         with:

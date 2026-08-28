@@ -15,6 +15,7 @@
 //! |---|---|---|
 //! | Linux | [`mpris`] | D-Bus signals, plus a slow `Position` poll |
 //! | macOS | [`macos`] | AppleScript, polled |
+//! | Windows | [`windows`] | System Media Transport Controls, polled |
 //! | other | [`unsupported`] | fails with a clear message |
 //!
 //! Everything above this line — [`Track`], [`PlayerEvent`], the ranking in
@@ -27,15 +28,19 @@ pub mod fake;
 pub mod macos;
 #[cfg(target_os = "linux")]
 pub mod mpris;
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 pub mod unsupported;
+#[cfg(target_os = "windows")]
+pub mod windows;
 
 #[cfg(target_os = "macos")]
 use macos as backend;
 #[cfg(target_os = "linux")]
 use mpris as backend;
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 use unsupported as backend;
+#[cfg(target_os = "windows")]
+use windows as backend;
 
 pub use backend::{PlayerHandle, Session};
 
