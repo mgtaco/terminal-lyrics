@@ -32,6 +32,7 @@ use tokio::sync::mpsc;
 
 use super::{EventRx, EventTx, PlayerEvent, PlayerState, Snapshot, Track, fallback_id};
 
+use ::windows::Media::Control::GlobalSystemMediaTransportControlsSession as SmtcSession;
 use ::windows::Media::Control::GlobalSystemMediaTransportControlsSessionManager as SmtcManager;
 use ::windows::Win32::System::Com::CoIncrementMTAUsage;
 
@@ -199,47 +200,61 @@ fn ensure_mta() {
     });
 }
 
-/// Read every session out of WinRT.
+/// Every live session, as an owned `Vec`.
 ///
-/// WinRT's async operations are futures here, not blocking calls: windows-rs
-/// gives `IAsyncOperation` an `IntoFuture`, and both it and the future it makes
-/// are `Send`, so this awaits on the normal runtime rather than occupying a
-/// blocking thread.
-async fn read_sessions() -> Result<Vec<RawSession>> {
+/// The `Vec` is the point. `GetSessions` hands back an `IVectorView`, and WinRT
+/// collections are bound to the apartment that made them, so windows-rs does not
+/// mark them `Send` — hold one across an `.await` and the whole future stops
+/// being `Send`, which `tokio::spawn` requires of the pump. The sessions inside
+/// it are agile and `Send`, so draining the view here and dropping it before any
+/// await is what keeps the async path usable.
+async fn live_sessions() -> Result<Vec<SmtcSession>> {
     ensure_mta();
 
     let manager = SmtcManager::RequestAsync()
         .context("the Windows media session manager is unavailable")?
         .await
         .context("could not open the Windows media session manager")?;
-    let sessions = manager
+    let view = manager
         .GetSessions()
         .context("could not list the Windows media sessions")?;
-    let count = sessions.Size().unwrap_or(0);
 
-    let mut out = Vec::with_capacity(count as usize);
-    for i in 0..count {
-        // One unreadable session — an app shutting down mid-read — must not
-        // hide the others, so each is attempted on its own.
-        let Ok(session) = sessions.GetAt(i) else {
-            continue;
-        };
-        let Ok(app_id) = session.SourceAppUserModelId() else {
-            continue;
-        };
-        let Ok(playback) = session.GetPlaybackInfo() else {
-            continue;
-        };
-        let Ok(status) = playback.PlaybackStatus() else {
-            continue;
-        };
+    // One unreadable session — an app shutting down mid-read — must not hide
+    // the others, so each is taken on its own.
+    Ok((0..view.Size().unwrap_or(0))
+        .filter_map(|i| view.GetAt(i).ok())
+        .collect())
+}
 
-        let (position_ticks, end_ticks) = match session.GetTimelineProperties() {
-            Ok(t) => (
-                t.Position().map(|p| p.Duration).unwrap_or(0),
-                t.EndTime().map(|e| e.Duration).unwrap_or(0),
-            ),
-            Err(_) => (0, 0),
+/// The parts of a session that read synchronously.
+///
+/// Split out so that none of the apartment-bound property objects are still
+/// alive when [`read_sessions`] awaits: same reasoning as [`live_sessions`].
+fn read_sync(session: &SmtcSession) -> Option<(String, i32, i64, i64)> {
+    let app_id = session.SourceAppUserModelId().ok()?.to_string();
+    let status = session.GetPlaybackInfo().ok()?.PlaybackStatus().ok()?.0;
+    let (position_ticks, end_ticks) = match session.GetTimelineProperties() {
+        Ok(t) => (
+            t.Position().map(|p| p.Duration).unwrap_or(0),
+            t.EndTime().map(|e| e.Duration).unwrap_or(0),
+        ),
+        Err(_) => (0, 0),
+    };
+    Some((app_id, status, position_ticks, end_ticks))
+}
+
+/// Read every session out of WinRT.
+///
+/// WinRT's async operations are futures here, not blocking calls: windows-rs
+/// gives `IAsyncOperation` an `IntoFuture`, so this awaits on the normal runtime
+/// rather than occupying a blocking thread.
+async fn read_sessions() -> Result<Vec<RawSession>> {
+    let sessions = live_sessions().await?;
+
+    let mut out = Vec::with_capacity(sessions.len());
+    for session in sessions {
+        let Some((app_id, status, position_ticks, end_ticks)) = read_sync(&session) else {
+            continue;
         };
 
         // The media properties are a second async call and the likeliest to
@@ -259,8 +274,8 @@ async fn read_sessions() -> Result<Vec<RawSession>> {
         };
 
         out.push(RawSession {
-            app_id: app_id.to_string(),
-            status: status.0,
+            app_id,
+            status,
             position_ticks,
             end_ticks,
             title,
@@ -274,24 +289,13 @@ async fn read_sessions() -> Result<Vec<RawSession>> {
 
 /// Toggle play/pause on the named session.
 async fn toggle(name: &str) -> Result<()> {
-    ensure_mta();
-
-    let manager = SmtcManager::RequestAsync()
-        .context("the Windows media session manager is unavailable")?
-        .await
-        .context("could not open the Windows media session manager")?;
-    let sessions = manager
-        .GetSessions()
-        .context("could not list the Windows media sessions")?;
-
-    for i in 0..sessions.Size().unwrap_or(0) {
-        let Ok(session) = sessions.GetAt(i) else {
+    for session in live_sessions().await? {
+        // Owned `String`, not the `HSTRING`: only `Send` values may still be
+        // alive at the await below.
+        let Some(app_id) = session.SourceAppUserModelId().ok().map(|h| h.to_string()) else {
             continue;
         };
-        let Ok(app_id) = session.SourceAppUserModelId() else {
-            continue;
-        };
-        if friendly_name(&app_id.to_string()) == name {
+        if friendly_name(&app_id) == name {
             session
                 .TryTogglePlayPauseAsync()
                 .context("play/pause was refused")?
