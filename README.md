@@ -27,7 +27,8 @@ word at a time wherever the timings allow it.
 
 The binary is self-contained: it links its TLS in statically and talks to your
 player through whatever the platform already provides, so nothing needs
-installing alongside it. Any one of these is the whole install.
+installing alongside it — the only shared libraries it wants are the C runtime,
+which is already on your system. Any one of these is the whole install.
 
 **With a Rust toolchain** (1.88 or newer):
 
@@ -346,7 +347,7 @@ still work.
 * On Linux, only MPRIS players are visible, so anything that does not expose an
   MPRIS interface goes unnoticed. On Windows the equivalent is registering with
   the media controls. On macOS it is narrower than either: Spotify and Apple
-  Music, and nothing else.
+  Music, and nothing else. See [Platforms](#platforms).
 * macOS needs Automation permission for the player you use. Refuse the prompt and
   the program says so and points at the setting, rather than reporting that
   nothing is playing.
