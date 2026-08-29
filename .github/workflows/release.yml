@@ -115,3 +115,78 @@ jobs:
           files: dist/*.tar.gz
           generate_release_notes: true
           fail_on_unmatched_files: true
+
+  crates-io:
+    name: Publish to crates.io
+    # Last, and deliberately so. A GitHub release can be deleted and rebuilt; a
+    # crates.io version cannot. It can be yanked, but the number is spent for
+    # good. So this only runs once every target has built and the release is up.
+    needs: [build, release]
+    runs-on: ubuntu-latest
+    # Trusted publishing: GitHub mints a short-lived OIDC token proving this
+    # workflow in this repository is what is asking, and crates.io swaps it for
+    # a registry token that expires in half an hour. There is no API token in
+    # the repository secrets to leak, rotate, or forget about. `contents: read`
+    # narrows the top-level `write`, which exists for the release job above and
+    # is not needed here.
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Both guards below are worth far more than the seconds they cost, for the
+      # same reason the job runs last: there is no undo.
+      #
+      # A tag that disagrees with the manifest is a bumped-and-forgot mistake,
+      # and it is silent everywhere else — the packaging step names archives
+      # from the tag, so `v0.3.0` would ship archives called 0.3.0 containing a
+      # 0.2.0 binary, and this would publish 0.2.0 over again.
+      - name: Check the tag against the manifest
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          manifest=$(cargo metadata --format-version 1 --no-deps \
+            | jq -r '.packages[] | select(.name == "terminal-lyrics") | .version')
+          echo "tag ${tag}, manifest ${manifest}"
+          if [ "$tag" != "$manifest" ]; then
+            echo "::error::tag v${tag} does not match Cargo.toml ${manifest}"
+            exit 1
+          fi
+
+      # Re-running a tag is supported above — the release action refreshes its
+      # assets. crates.io has no equivalent: publishing a version twice is an
+      # error. So check first and skip, letting a re-run finish green instead of
+      # failing on the one job that already did its work.
+      #
+      # A failure to reach the index at all (or a crate with no versions yet)
+      # falls through to the publish, which is the right way round: the worst
+      # case is a publish that errors, not a release that silently skips.
+      - name: Is this version already published?
+        id: check
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          if curl -sSf https://index.crates.io/te/rm/terminal-lyrics \
+            | jq -e --arg v "$version" -s 'any(.[]; .vers == $v)' >/dev/null; then
+            echo "already=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "already=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Pinned exactly: this action publishes no moving major tag, so `@v1`
+      # would not resolve.
+      - uses: rust-lang/crates-io-auth-action@v1.0.5
+        id: auth
+        if: steps.check.outputs.already == 'false'
+
+      - name: Publish
+        if: steps.check.outputs.already == 'false'
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: cargo publish --locked
+
+      - name: Nothing to publish
+        if: steps.check.outputs.already == 'true'
+        run: echo "::notice::${GITHUB_REF_NAME} is already on crates.io"

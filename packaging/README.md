@@ -24,47 +24,32 @@
    files are published alongside the archives: a sidecar written by the same job
    that built the archive would only repeat this, less trustworthily.
 
-That is the whole release. Everything below is publishing it elsewhere, and all
-of it needs credentials this repository does not carry.
+That is the whole release, and crates.io rides along with it. The AUR below is
+the one place left that needs a credential no workflow holds.
 
 ## crates.io
 
 Published: <https://crates.io/crates/terminal-lyrics>. `cargo install
 terminal-lyrics` is the toolchain install route.
 
-```bash
-cargo publish --dry-run   # no credentials needed; run this before every release
-cargo publish             # with CARGO_REGISTRY_TOKEN set
-```
-
 The manifest carries everything crates.io requires, and `rust-version` is 1.88 —
 the floor `ratatui` 0.30 imposes, not the 1.85 that edition 2024 would suggest.
 
-### Switch this to Trusted Publishing
+Publishing is automatic: the `crates-io` job in `release.yml` does it when a tag
+builds, so a release needs no manual step and no stored credential. It
+authenticates by Trusted Publishing — GitHub mints an OIDC token proving the
+workflow is what is asking, crates.io swaps it for a registry token good for half
+an hour, and nothing outlives the job. The trusted publisher is configured on the
+crate's settings page against owner `mgtaco`, repository `terminal-lyrics`,
+workflow `release.yml`; the API token used for the 0.2.0 publish has been revoked.
 
-The crate exists now, which is the precondition: crates.io cannot hold a trusted
-publisher in a pending state before a crate's first publish, so the first one had
-to use an API token. That token has done its job and should be revoked.
+The job runs after everything else, because a publish is the one irreversible
+step here — a version can be yanked but its number is spent for good — and it
+guards itself twice: the tag has to agree with `Cargo.toml`, and a version
+already on the index is skipped rather than re-published, so re-running a tag
+stays green.
 
-Configure a trusted publisher on the crate's settings page — owner `mgtaco`,
-repository `terminal-lyrics`, workflow `release.yml` — then a release can
-authenticate over OIDC with a credential that lasts under an hour and is revoked
-when the job ends, with no stored secret:
-
-```yaml
-permissions:
-  id-token: write
-  contents: write
-steps:
-  - uses: rust-lang/crates-io-auth-action@v1
-    id: auth
-  - run: cargo publish
-    env:
-      CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
-```
-
-This is not wired into `release.yml` yet, because the job would fail on every tag
-until the trusted publisher is configured.
+To check a release before tagging, `cargo publish --dry-run` needs no credentials.
 
 ## AUR
 
