@@ -6,6 +6,8 @@
 
 [![crates.io](https://img.shields.io/crates/v/terminal-lyrics?style=flat-square&color=B7410E&logo=rust&logoColor=white)](https://crates.io/crates/terminal-lyrics)
 [![Latest release](https://img.shields.io/github/v/release/mgtaco/terminal-lyrics?style=flat-square&label=release&color=2EA44F&logo=github&logoColor=white)](https://github.com/mgtaco/terminal-lyrics/releases/latest)
+[![Linux, macOS and Windows](https://img.shields.io/badge/Linux_%2B_macOS_%2B_Windows-MPRIS_%2F_AppleScript_%2F_SMTC-64748B?style=flat-square)](#platforms)
+[![Four lyrics sources](https://img.shields.io/badge/lyrics-4_synced_sources-0EA5E9?style=flat-square)](#how-it-works)
 [![MIT licence](https://img.shields.io/github/license/mgtaco/terminal-lyrics?style=flat-square&color=8A2BE2)](LICENSE)
 
 ![Word-timed lyrics appearing one word at a time, a long word building up syllable by syllable](docs/demo.gif)
