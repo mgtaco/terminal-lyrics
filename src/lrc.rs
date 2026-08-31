@@ -546,12 +546,43 @@ fn attach_backgrounds(lines: &mut [Line], backgrounds: Vec<Draft>) {
             continue;
         }
         let end = bg.sung_end().unwrap_or(bg.start + MIN_SECONDARY_HOLD);
+        let text = unwrap_brackets(bg.text.trim());
+        if text.is_empty() {
+            continue;
+        }
         lines[target].secondary.push(Secondary {
             start: bg.start,
             end,
-            text: bg.text,
+            text,
             background: true,
         });
+    }
+}
+
+/// Take the brackets off a background phrase: `"(ooh ooh)"` is `ooh ooh`.
+///
+/// Sources write a backing vocal in parentheses because plain text has no other
+/// way to say "this is not the line". We do: it is dimmed, drawn a size smaller,
+/// and reached through `Secondary` at all. Kept, the brackets are a pair of
+/// bars flanking every background phrase on screen — punctuation restating what
+/// the whole shape of it already says.
+///
+/// Only a matched pair wrapping the whole phrase comes off. A stray bracket is
+/// left alone: it is either part of the words or a phrase split across lines,
+/// and neither is ours to tidy.
+fn unwrap_brackets(text: &str) -> String {
+    let mut chars = text.chars();
+    let closer = match (chars.next(), chars.next_back()) {
+        (Some('('), Some(')')) => ')',
+        (Some('（'), Some('）')) => '）',
+        (Some('['), Some(']')) => ']',
+        _ => return text.to_string(),
+    };
+    let inner = chars.as_str().trim();
+    // A pair that closes and reopens midway ("(oh) and (ah)") is not a wrapper.
+    match inner.contains(closer) {
+        true => text.to_string(),
+        false => inner.to_string(),
     }
 }
 

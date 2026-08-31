@@ -186,7 +186,7 @@ fn a_background_marker_is_a_second_voice_not_body_text() {
     assert_eq!(l.lines.len(), 1, "a backing vocal is not a line of its own");
     assert_eq!(l.lines[0].text, "I will always love you");
     let second = &l.lines[0].secondary[0];
-    assert_eq!(second.text, "(ooh ooh)");
+    assert_eq!(second.text, "ooh ooh", "the brackets are not part of the words");
     assert!(second.background);
     assert!((second.start - 11.0).abs() < 0.001);
     assert!((second.end - 13.0).abs() < 0.001);
@@ -313,7 +313,7 @@ fn a_second_voice_survives_being_reparsed_from_its_own_text() {
                 [00:11.000][bg:00:10.000][end:00:13.000](ooh ooh)\n";
     assert_eq!(lrc::parse(text), lrc::parse(&format!("{text}{}", "")));
     let once = lrc::parse(text);
-    assert_eq!(once.lines[0].secondary[0].text, "(ooh ooh)");
+    assert_eq!(once.lines[0].secondary[0].text, "ooh ooh");
 }
 
 #[test]
@@ -326,4 +326,23 @@ fn a_brief_overlap_between_two_long_lines_is_still_slop() {
          [00:20.000][end:00:31.000]a long second line\n",
     );
     assert!(l.lines[1].secondary.is_empty());
+}
+
+#[test]
+fn only_a_pair_wrapping_the_whole_background_comes_off() {
+    // A stray bracket is either part of the words or a phrase carried over from
+    // the line before, and a pair that closes midway is two asides, not a
+    // wrapper. Neither is ours to tidy.
+    let l = lrc::parse(
+        "[00:10.000][end:00:20.000]the line\n\
+         [00:11.000][bg:00:10.000][end:00:12.000](ooh\n\
+         [00:12.000][bg:00:10.000][end:00:13.000](oh) and (ah)\n\
+         [00:13.000][bg:00:10.000][end:00:14.000][ooh ooh]\n",
+    );
+    let voices: Vec<&str> = l.lines[0]
+        .secondary
+        .iter()
+        .map(|s| s.text.as_str())
+        .collect();
+    assert_eq!(voices, ["(ooh", "(oh) and (ah)", "ooh ooh"]);
 }

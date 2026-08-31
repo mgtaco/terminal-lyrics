@@ -61,7 +61,7 @@ fn background_vocals_become_a_second_voice_above_the_line() {
     assert_eq!(parsed.lines[0].words.len(), 2);
 
     let second = &parsed.lines[0].secondary[0];
-    assert_eq!(second.text, "(echo)");
+    assert_eq!(second.text, "echo");
     assert!(second.background, "an x-bg span is a background vocal");
     assert!((second.start - 1.2).abs() < 0.001);
     assert!((second.end - 1.4).abs() < 0.001);
@@ -73,7 +73,7 @@ fn a_translation_inside_a_background_span_is_still_dropped() {
     // lives inside the backing vocal. Capturing one must not capture the other.
     let parsed = lrc::parse(&ttml::to_enhanced_lrc(&fixture("duet_bg.ttml")).unwrap());
     let second = &parsed.lines[0].secondary[0];
-    assert_eq!(second.text, "(Know)");
+    assert_eq!(second.text, "Know");
     assert!(
         !parsed.lines.iter().any(|l| l.text.contains('知')),
         "translations are still not lyrics, wherever they are nested"
@@ -84,7 +84,7 @@ fn a_translation_inside_a_background_span_is_still_dropped() {
 fn a_background_wrapper_with_no_times_takes_them_from_its_spans() {
     let parsed = lrc::parse(&ttml::to_enhanced_lrc(&fixture("duet_bg.ttml")).unwrap());
     let second = &parsed.lines[1].secondary[0];
-    assert_eq!(second.text, "(ooh)");
+    assert_eq!(second.text, "ooh");
     assert!(
         (second.start - 21.0).abs() < 0.001,
         "start came from the span"
@@ -102,7 +102,7 @@ fn a_background_line_is_attached_to_its_own_line_not_the_nearest_one() {
         .iter()
         .find(|l| l.text == "Long third line")
         .expect("the line the background belongs to");
-    assert_eq!(host.secondary[0].text, "(late)");
+    assert_eq!(host.secondary[0].text, "late");
     let neighbour = parsed
         .lines
         .iter()

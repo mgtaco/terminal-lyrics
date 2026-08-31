@@ -223,7 +223,7 @@ fn a_second_voice_is_offered_only_while_it_is_singing() {
     assert!(t.secondary(index, 11.0).is_none(), "it has not come in yet");
     assert_eq!(
         t.secondary(index, 13.0).map(|s| s.text.as_str()),
-        Some("(ooh ooh)")
+        Some("ooh ooh")
     );
     assert!(t.secondary(index, 17.0).is_none(), "and it has stopped");
 }

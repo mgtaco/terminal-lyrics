@@ -132,7 +132,7 @@ fn background_vocals_survive_the_cache_round_trip() {
 
     let got = cache.get(KEY).expect("still cached").expect("a hit");
     let second = &got.lyrics.lines[0].secondary[0];
-    assert_eq!(second.text, "(ooh ooh)");
+    assert_eq!(second.text, "ooh ooh");
     assert!(second.background);
     let _ = std::fs::remove_dir_all(&dir);
 }
