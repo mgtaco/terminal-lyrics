@@ -70,7 +70,8 @@ color_source = "terminal"
 
 # When to highlight the sung part of what is on screen.
 #   "never"  — no highlight (default)
-#   "auto"   — only when the lyrics carry real per-word timestamps
+#   "auto"   — only when the lyrics carry real per-word timestamps and the whole
+#              line is on screen; with word_by_word there is nothing to point at
 #   "always" — also for line-level lyrics, where the highlight is an estimate
 sweep = "never"
 

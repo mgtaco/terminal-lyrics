@@ -62,8 +62,9 @@ pub struct Cli {
     pub color_source: Option<ColorSource>,
 
     /// Always highlight words as they are sung, even when the timings are
-    /// interpolated. By default the highlight appears only for lyrics that
-    /// carry real per-word timestamps.
+    /// interpolated or a single word is on screen. By default the highlight
+    /// appears only for whole lines of lyrics that carry real per-word
+    /// timestamps.
     #[arg(long, overrides_with = "no_sweep")]
     pub sweep: bool,
 

@@ -131,8 +131,9 @@ impl TryFrom<String> for ColorSource {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Sweep {
-    /// Highlight only when the source carries real per-word timestamps.
-    /// Anything else would be highlighting a guess.
+    /// Highlight only when the source carries real per-word timestamps and
+    /// the whole line is on screen. Anything else would be highlighting a
+    /// guess, and with one word at a time there is nothing left to point at.
     Auto,
     /// Always highlight, interpolating across the phrase when the source is
     /// line-level.
@@ -142,10 +143,13 @@ pub enum Sweep {
 }
 
 impl Sweep {
-    /// Whether to highlight, given what the loaded lyrics actually carry.
-    pub fn applies(self, has_word_timings: bool) -> bool {
+    /// Whether to highlight, given what the loaded lyrics actually carry and
+    /// how much of the line is on screen. `Auto` stays out of the way when the
+    /// display is already down to one word: the sweep exists to say which word
+    /// of the line is being sung, and a lone word says that by itself.
+    pub fn applies(self, has_word_timings: bool, word_by_word: bool) -> bool {
         match self {
-            Sweep::Auto => has_word_timings,
+            Sweep::Auto => has_word_timings && !word_by_word,
             Sweep::Always => true,
             Sweep::Never => false,
         }

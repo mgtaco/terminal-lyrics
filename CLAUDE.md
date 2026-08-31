@@ -28,6 +28,10 @@ provider ordering and matching in full.
 - Player picking stays platform-neutral: playing beats has-a-track beats
   anything else, name as tiebreak.
 - Nothing interpolated (e.g. the sweep highlight) is ever written to disk.
+- The sweep says which word of the line is being sung, so `Sweep::Auto` wants
+  both halves of that: real word timings, and the rest of the line to point at.
+  One word at a time supplies the answer on its own, so auto turns itself off
+  there. `always` still sweeps the syllables of the word on screen.
 - The sync nudge is per track, keyed by the same id as the lyrics cache, and
   saved under the data dir rather than the cache dir — it is the user's own
   correction, and a cache is by definition safe to delete. Only tuned tracks get

@@ -302,7 +302,7 @@ fn draw(terminal: &mut DefaultTerminal, app: &App) -> Result<()> {
             } => match timeline.locate(pos) {
                 Position::Line { index } => {
                     if let Some(line) = timeline.line(index) {
-                        highlight = if app.cfg.sweep.applies(*word_timed) {
+                        highlight = if app.cfg.sweep.applies(*word_timed, app.cfg.word_by_word) {
                             timeline.highlight_chars(index, pos)
                         } else {
                             0
@@ -536,7 +536,8 @@ async fn handle_key(
             app.cfg.sweep = app.cfg.sweep.next();
             let active = matches!(
                 app.state,
-                LyricState::Ready { word_timed, .. } if app.cfg.sweep.applies(word_timed)
+                LyricState::Ready { word_timed, .. }
+                    if app.cfg.sweep.applies(word_timed, app.cfg.word_by_word)
             );
             app.note(format!(
                 "highlight: {} ({})",

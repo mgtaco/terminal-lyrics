@@ -268,6 +268,13 @@ has to be interpolated from character counts between two real timestamps, which
 makes it an estimate, and `lyrics status` labels it as one. It remains a display
 effect throughout: nothing invented is ever written to disk.
 
+`auto` is the middle setting and it asks what the highlight would actually be
+telling you. Its job is to say which word of the line is being sung, so it wants
+real per-word timestamps to place it — and it wants the rest of the line there to
+place it against. One word at a time already answers the question by itself, so
+`auto` stays out of the way whenever word-by-word is on. `--sweep` overrides
+that: it sweeps the syllables of the word on screen.
+
 ### Two voices
 
 Where two people are singing at once, both are on screen. A backing vocal — the

@@ -276,7 +276,7 @@ fn report_lyrics(cfg: &Config, found: &terminal_lyrics::lyrics::Found) {
     println!(
         "highlight {} -> {}",
         cfg.sweep.label(),
-        if cfg.sweep.applies(word_timed) {
+        if cfg.sweep.applies(word_timed, cfg.word_by_word) {
             "on"
         } else {
             "off"

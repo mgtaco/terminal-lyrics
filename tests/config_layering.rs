@@ -206,13 +206,24 @@ fn sweep_flags_override_the_file() {
 fn auto_highlights_only_lyrics_with_real_word_timings() {
     // The whole point of the default: a line-level LRC gets no moving
     // highlight, because there is nothing real to move it with.
-    assert!(Sweep::Auto.applies(true));
-    assert!(!Sweep::Auto.applies(false));
+    assert!(Sweep::Auto.applies(true, false));
+    assert!(!Sweep::Auto.applies(false, false));
     // The overrides ignore what the source carries.
-    assert!(Sweep::Always.applies(false));
-    assert!(Sweep::Always.applies(true));
-    assert!(!Sweep::Never.applies(true));
-    assert!(!Sweep::Never.applies(false));
+    assert!(Sweep::Always.applies(false, false));
+    assert!(Sweep::Always.applies(true, false));
+    assert!(!Sweep::Never.applies(true, false));
+    assert!(!Sweep::Never.applies(false, false));
+}
+
+#[test]
+fn auto_drops_the_highlight_when_only_one_word_is_on_screen() {
+    // Nothing for the sweep to point at: the word on screen is the word being
+    // sung. Asking for it outright still gets it.
+    assert!(!Sweep::Auto.applies(true, true));
+    assert!(Sweep::Always.applies(true, true));
+    assert!(!Sweep::Never.applies(true, true));
+    // Word-by-word is ignored for line-level lyrics, and so is this.
+    assert!(!Sweep::Auto.applies(false, true));
 }
 
 #[test]
