@@ -495,6 +495,27 @@ fn apply_fetch(app: &mut App, result: FetchResult) {
     }
 }
 
+/// What `,` and `.` move the sync by.
+const FINE_NUDGE_MS: i64 = 100;
+
+/// What `<` and `>` move it by.
+///
+/// A hundred milliseconds is the right step for the last of a correction and
+/// the wrong one for the start of it: lrcmux's Musixmatch answers are timed
+/// against a different master often enough, and are out by two or three whole
+/// seconds when they are, which is thirty presses of `.` at the fine step. The
+/// coarse key is the same correction in three, and lands close enough that the
+/// fine one has something to finish.
+const COARSE_NUDGE_MS: i64 = 1000;
+
+/// Move the current song's sync and say so. Shared by all four nudge keys so
+/// the message and the save cannot drift apart between them.
+fn nudge(app: &mut App, delta_ms: i64) {
+    app.nudge_offset(delta_ms);
+    let off = app.offset_ms();
+    app.note(format!("offset {off:+}ms  (saved for this song)"));
+}
+
 async fn handle_key(
     app: &mut App,
     key: KeyEvent,
@@ -511,16 +532,10 @@ async fn handle_key(
         KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             app.should_quit = true;
         }
-        KeyCode::Char(',') => {
-            app.nudge_offset(-100);
-            let off = app.offset_ms();
-            app.note(format!("offset {off:+}ms  (saved for this song)"));
-        }
-        KeyCode::Char('.') => {
-            app.nudge_offset(100);
-            let off = app.offset_ms();
-            app.note(format!("offset {off:+}ms  (saved for this song)"));
-        }
+        KeyCode::Char(',') => nudge(app, -FINE_NUDGE_MS),
+        KeyCode::Char('.') => nudge(app, FINE_NUDGE_MS),
+        KeyCode::Char('<') => nudge(app, -COARSE_NUDGE_MS),
+        KeyCode::Char('>') => nudge(app, COARSE_NUDGE_MS),
         KeyCode::Char('0') => {
             app.reset_offset();
             let off = app.offset_ms();

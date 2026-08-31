@@ -12,6 +12,7 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 
 use crate::cli::Cli;
+use crate::lyrics::lrcmux;
 use crate::lyrics::{LRCMUX_URL, LYRICSPLUS_URL, Provider};
 
 /// Where the accent colour comes from.
@@ -208,6 +209,9 @@ pub struct Config {
     pub lyricsplus_url: String,
     /// Base URL of the lrcmux instance, overridable for the same reason.
     pub lrcmux_url: String,
+    /// Which of lrcmux's own upstreams it may answer from. lrcmux ranks them
+    /// itself and cannot be told to prefer one, so this is a filter.
+    pub lrcmux_sources: lrcmux::Sources,
 }
 
 impl Default for Config {
@@ -227,6 +231,9 @@ impl Default for Config {
             providers: Provider::DEFAULT_ORDER.to_vec(),
             lyricsplus_url: LYRICSPLUS_URL.to_string(),
             lrcmux_url: LRCMUX_URL.to_string(),
+            lrcmux_sources: lrcmux::Sources::DEFAULT
+                .parse()
+                .expect("the built-in default parses"),
         }
     }
 }
@@ -251,6 +258,10 @@ pub struct ConfigFile {
     pub providers: Option<Vec<Provider>>,
     pub lyricsplus_url: Option<String>,
     pub lrcmux_url: Option<String>,
+    /// A contradictory list here is an error for the same reason an unknown
+    /// provider name is: silently ignored, it would look like the filter simply
+    /// not working.
+    pub lrcmux_sources: Option<lrcmux::Sources>,
 }
 
 impl ConfigFile {
@@ -318,6 +329,11 @@ impl Config {
                 .clone()
                 .or(file.lrcmux_url)
                 .unwrap_or(d.lrcmux_url),
+            lrcmux_sources: cli
+                .lrcmux_sources
+                .clone()
+                .or(file.lrcmux_sources)
+                .unwrap_or(d.lrcmux_sources),
         }
     }
 }

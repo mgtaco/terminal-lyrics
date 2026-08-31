@@ -75,6 +75,7 @@ fn client_for(cfg: &Config) -> Result<Option<Net>> {
         Ok(Some(Net::new(
             cfg.lyricsplus_url.clone(),
             cfg.lrcmux_url.clone(),
+            cfg.lrcmux_sources.clone(),
         )?))
     } else {
         Ok(None)

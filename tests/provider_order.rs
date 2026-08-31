@@ -23,6 +23,9 @@ enum Answer {
     /// answer, and still the wrong one to stop on if a better source is left
     /// to ask.
     LineHit,
+    /// Has lyrics, word-timed, and timed against a longer recording: the last
+    /// line starts after this track has already ended.
+    PastEnd,
     /// Working, and does not have them.
     Miss,
     /// Down.
@@ -66,6 +69,7 @@ impl Providers for Fake {
         let result = match self.answer(provider) {
             Answer::Hit => Ok(Some(found_from(provider, WORD_TIMED))),
             Answer::LineHit => Ok(Some(found_from(provider, LINE_TIMED))),
+            Answer::PastEnd => Ok(Some(found_from(provider, PAST_END))),
             Answer::Miss => Ok(None),
             Answer::Boom => Err(std::io::Error::other(format!("{provider} is down")).into()),
         };
@@ -75,6 +79,8 @@ impl Providers for Fake {
 
 const WORD_TIMED: &str = "[00:01.000]<00:01.000>Hello<00:01.500> <00:02.000>world<00:02.500>\n";
 const LINE_TIMED: &str = "[00:01.000]Hello world\n";
+/// The track is 238.6s long; this last line starts well past four minutes.
+const PAST_END: &str = "[00:01.000]Hello world\n[04:30.000]Still going\n";
 
 fn found_from(provider: Provider, raw: &str) -> Found {
     Found {
@@ -275,4 +281,32 @@ async fn a_line_level_answer_beside_a_broken_provider_is_not_an_error() {
     ]);
     let found = chain(&fake, &DEFAULT).await.unwrap().expect("the fallback");
     assert_eq!(found.source, Source::LrcLib { id: 1 });
+}
+
+#[tokio::test]
+async fn lyrics_timed_past_the_end_of_the_song_are_stepped_over() {
+    // A confidently word-timed answer for a *longer* recording is not a better
+    // answer than a line-level one for this one — it is wrong from the first
+    // line, because the whole document is shifted. So it must not stop the
+    // chain, and must not be kept as the fallback either.
+    let fake = Fake::new(&[
+        (Provider::LrcMux, Answer::PastEnd),
+        (Provider::LrcLib, Answer::LineHit),
+    ]);
+    let found = chain(&fake, &DEFAULT).await.unwrap().expect("a hit");
+    assert_eq!(
+        found.source,
+        Source::LrcLib { id: 1 },
+        "LRCLIB's line-level answer for this recording beats word timings for another"
+    );
+    assert_eq!(fake.calls(), DEFAULT.to_vec());
+}
+
+#[tokio::test]
+async fn an_overrunning_answer_counts_as_a_miss_not_an_outage() {
+    // Nothing else has anything. The lookup must come back as a clean miss, so
+    // it is cached as one and the UI says "no lyrics" rather than "network
+    // trouble" — the provider did answer, it just answered about another edit.
+    let fake = Fake::new(&[(Provider::LrcMux, Answer::PastEnd)]);
+    assert!(chain(&fake, &DEFAULT).await.unwrap().is_none());
 }

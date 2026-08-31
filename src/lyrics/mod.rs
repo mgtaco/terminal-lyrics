@@ -14,12 +14,15 @@
 //! * **LyricsPlus** is Apple's own TTML — syllable-level too, and the dialect
 //!   the renderer is already tuned for.
 //! * **lrcmux** is the reach: five upstreams behind one API, so it degrades
-//!   rather than dies.
+//!   rather than dies. Which of those five it may use is [`lrcmux::Sources`],
+//!   because they are not equally trustworthy and lrcmux picks for itself.
 //! * **LRCLIB** last, for the line-level answer that is better than nothing.
 //!
 //! That ordering is a prediction, though, and [`first_hit`] does not trust it
 //! blindly: a provider that answers line-level is held as a fallback rather
-//! than believed, and the chain keeps going. Only word timings stop it.
+//! than believed, and the chain keeps going. Only word timings stop it. An
+//! answer whose last line starts after the song has ended is stepped over
+//! entirely — see [`MAX_TAIL_OVERRUN`].
 //!
 //! Which of them run, and in what order, is [`Provider`] — a config list, not
 //! a flag each, so a self-hoster can drop one by deleting a word.
@@ -48,6 +51,34 @@ use crate::player::Track;
 /// wrong throughout — worse than showing nothing. Every provider that can check
 /// a duration applies it, so one of them cannot quietly be laxer than the rest.
 pub const MAX_DURATION_DELTA: f64 = 5.0;
+
+/// How far past the end of the song a lyric line may still start.
+///
+/// A line that begins after the music has stopped was timed against a longer
+/// recording, and everything before it is shifted too. This is deliberately far
+/// looser than [`MAX_DURATION_DELTA`]: the player's own reported length and the
+/// upstream's idea of where the last line falls disagree by a few seconds all
+/// the time, and legitimate answers were measured overrunning by up to seven.
+/// Fifteen seconds is past arguing — the worst real case found was a set of
+/// lyrics running forty-five seconds past the end of a two-minute song.
+///
+/// Unlike [`MAX_DURATION_DELTA`] this needs nothing from the provider but the
+/// lyrics themselves, so [`first_hit`] applies it to every provider at once
+/// rather than leaving each one to remember.
+pub const MAX_TAIL_OVERRUN: f64 = 15.0;
+
+/// Whether the last line starts after the song is already over.
+fn timed_past_end(lyrics: &Lyrics, length: Option<f64>) -> bool {
+    let Some(length) = length.filter(|d| *d > 0.0) else {
+        return false;
+    };
+    lyrics
+        .lines
+        .iter()
+        .map(|l| l.start)
+        .fold(f64::NEG_INFINITY, f64::max)
+        > length + MAX_TAIL_OVERRUN
+}
 
 /// The default base URLs. Both services are small and community-run, and both
 /// document self-hosting, so both are overridable in the config.
@@ -241,14 +272,20 @@ pub struct Net {
     lrclib: LrcLib,
     lyricsplus_url: String,
     lrcmux_url: String,
+    lrcmux_sources: lrcmux::Sources,
 }
 
 impl Net {
-    pub fn new(lyricsplus_url: String, lrcmux_url: String) -> Result<Self> {
+    pub fn new(
+        lyricsplus_url: String,
+        lrcmux_url: String,
+        lrcmux_sources: lrcmux::Sources,
+    ) -> Result<Self> {
         Ok(Self {
             lrclib: LrcLib::new()?,
             lyricsplus_url,
             lrcmux_url,
+            lrcmux_sources,
         })
     }
 }
@@ -271,7 +308,13 @@ impl Providers for Net {
                     lyricsplus::fetch(self.lrclib.http(), &self.lyricsplus_url, track).await
                 }
                 Provider::LrcMux => {
-                    lrcmux::fetch(self.lrclib.http(), &self.lrcmux_url, track).await
+                    lrcmux::fetch(
+                        self.lrclib.http(),
+                        &self.lrcmux_url,
+                        &self.lrcmux_sources,
+                        track,
+                    )
+                    .await
                 }
                 Provider::LrcLib => {
                     lrclib::fetch(
@@ -317,6 +360,17 @@ pub async fn first_hit(
     for &provider in order {
         match providers.fetch(provider, track).await {
             Ok(Some(found)) => {
+                // Not a miss and not an error: a real answer, timed against a
+                // recording this is not. Step over it as if the provider had
+                // said "not here", because that is what it amounts to.
+                if timed_past_end(&found.lyrics, track.length) {
+                    debug(&format!(
+                        "{provider} answered with lyrics running past the end of the track; \
+                         ignoring"
+                    ));
+                    answered = true;
+                    continue;
+                }
                 if found.lyrics.has_word_timings() {
                     return Ok(Some(found));
                 }

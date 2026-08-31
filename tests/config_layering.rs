@@ -38,6 +38,7 @@ resync_threshold_ms = 333
 providers = ["lrcmux", "lrclib"]
 lyricsplus_url = "https://lp.file"
 lrcmux_url = "https://mux.file"
+lrcmux_sources = ["musixmatch", "ytmusic"]
 "#;
 
 #[test]
@@ -105,6 +106,52 @@ fn flag_beats_file_for_the_provider_list() {
     assert_eq!(cfg.providers, vec![Provider::LrcLib, Provider::Amll]);
     // The list is an order, not a set: the flag's order is the one used.
     assert_ne!(cfg.providers, vec![Provider::Amll, Provider::LrcLib]);
+}
+
+#[test]
+fn the_default_lrcmux_filter_excludes_kugou() {
+    // The one upstream measured returning confidently-timed wrong words. If
+    // this ever becomes an allow-list by accident, every other upstream is
+    // silently switched off with it.
+    let cfg = resolve("", &[]);
+    assert_eq!(
+        cfg.lrcmux_sources.names(),
+        ["!kugou"],
+        "the default is a deny-list of one, not an allow-list"
+    );
+    assert_eq!(cfg.lrcmux_sources.param().as_deref(), Some("!kugou"));
+}
+
+#[test]
+fn file_then_flag_win_for_the_lrcmux_filter() {
+    let cfg = resolve(FULL_FILE, &[]);
+    assert_eq!(cfg.lrcmux_sources.names(), ["musixmatch", "ytmusic"]);
+
+    let cfg = resolve(FULL_FILE, &["--lrcmux-sources", "!kugou,!genius"]);
+    assert_eq!(cfg.lrcmux_sources.names(), ["!kugou", "!genius"]);
+
+    // `all` is the way to spell "no filter": an empty string is eaten by the
+    // shell and would be rejected as a missing value.
+    let cfg = resolve(FULL_FILE, &["--lrcmux-sources", "all"]);
+    assert!(cfg.lrcmux_sources.names().is_empty());
+    assert_eq!(
+        cfg.lrcmux_sources.param(),
+        None,
+        "an empty filter sends no parameter at all"
+    );
+}
+
+#[test]
+fn a_contradictory_lrcmux_filter_is_rejected() {
+    // Allowing `musixmatch` already excludes kugou; asking for both forms at
+    // once means the user thinks one of them does something it does not.
+    let err = ConfigFile::parse(r#"lrcmux_sources = ["musixmatch", "!kugou"]"#)
+        .expect_err("a mixed allow/deny list must not load");
+    let full = format!("{err:#}");
+    assert!(full.contains("mix"), "the message explains why: {full}");
+
+    assert!(Cli::try_parse_from(["lyrics", "--lrcmux-sources", "musixmatch,!kugou"]).is_err());
+    assert!(Cli::try_parse_from(["lyrics", "--lrcmux-sources", "!"]).is_err());
 }
 
 #[test]

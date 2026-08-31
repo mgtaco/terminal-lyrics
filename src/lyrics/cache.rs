@@ -34,7 +34,13 @@ const MISS_TTL: Duration = Duration::from_secs(24 * 60 * 60);
 /// entries never expire, so every AMLL and Apple track already in the cache
 /// holds the shape from before a second voice could be written down, and would
 /// keep serving lyrics with the backing vocals stripped out of them forever.
-const CACHE_VERSION: u32 = 4;
+///
+/// Bumped to 5 for the lrcmux upstream filter. The entries this is meant to be
+/// rid of are word-timed by definition — KuGou answers with confident timings
+/// and the wrong words — so "never expire" is exactly what would keep them, and
+/// nothing short of a version bump reaches them. The cost is one re-fetch of
+/// every track ever played, which is what a cache is for.
+const CACHE_VERSION: u32 = 5;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Entry {

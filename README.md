@@ -100,6 +100,7 @@ lyrics are shown a phrase at a time.
 | `q` `Esc` | quit |
 | `space` | play/pause the player |
 | `,` `.` | shift lyrics 100 ms earlier / later, saved for this song |
+| `<` `>` | the same in whole seconds, for a song that is badly out |
 | `0` | forget this song's shift and go back to the default |
 | `f` | cycle font: block → compact → mini |
 | `w` | one word at a time, or whole lines |
@@ -108,7 +109,9 @@ lyrics are shown a phrase at a time.
 | `r` | forget the cached lyrics and look them up again |
 
 The shift belongs to the song, not to the session. A file that plays 300 ms late
-is fixed once with `,`, and the correction is written to disk against that track
+is fixed once with `,` — or, when a set of lyrics is timed against a different
+master and is out by two or three whole seconds, with `<` and `>` first and `,`
+and `.` to finish — and the correction is written to disk against that track
 and reapplied every time it comes on again — while the next song starts from
 `offset_ms` in the config, which is what that setting now means: where a song
 starts before anyone has nudged it. `0` forgets a song's shift and puts it back
@@ -127,6 +130,7 @@ The flags worth knowing:
 | `--lrc-dir ~/lyrics` | prefer your own `Artist - Title.lrc` files |
 | `--no-network` | use only those files and the cache |
 | `--offset-ms -250` | starting point for every song you have not tuned by hand |
+| `--lrcmux-sources all` | let lrcmux use every upstream, KuGou included |
 | `--color-source pywal` | take one accent colour from a palette |
 
 ## Without the TUI
@@ -208,7 +212,7 @@ set of lyrics is never passed over for a merely likelier one:
 | --- | :-: | --- |
 | [AMLL TTML DB](https://github.com/amll-dev/amll-ttml-db) | syllable | CC0 and community-maintained, keyed by the Spotify track ID the player already hands us, so it needs neither a search nor any matching guesswork. It holds about 2,400 entries, so it costs one request and misses often — but when it hits, nothing else needs asking |
 | [LyricsPlus](https://github.com/ibratabian17/lyricsplus) | syllable | Apple Music's own TTML, which splits a long word into pieces the display then builds up in place. Matched on artist and title, with the length Apple records in the document used to throw out a different edit. Its `platformId=spotify:…` parameter is not used: the public instance has no Spotify credentials to resolve an ID with, and answers every such query 404 |
-| [lrcmux](https://github.com/f1nniboy/lrcmux) | word | one API in front of Musixmatch richsync, KuGou, NetEase, Genius and YouTube Music, and the widest of the four: five upstreams means it degrades rather than dies. It says outright whether the answer it found carries word timings |
+| [lrcmux](https://github.com/f1nniboy/lrcmux) | word | one API in front of Musixmatch richsync, KuGou, YouTube Music, Genius and LRCLIB, and the widest of the four: five upstreams means it degrades rather than dies. It says outright whether the answer it found carries word timings, and which upstream they came from |
 | [LRCLIB](https://lrclib.net) | line | millions of tracks, but line-level timing only. Every one of the 923 `syncedLyrics` entries sampled was line-level, which is why it is asked last rather than first |
 
 LyricsPlus and lrcmux are small community-run instances, and both projects
@@ -225,6 +229,38 @@ LRCLIB's line-level answer to somebody's server being unreachable would be the
 worst trade available. A lookup only fails outright when every provider failed
 and none of them managed to say "not here".
 
+lrcmux is five sources wearing one coat, and they are not equally good, so it
+has a filter of its own:
+
+```toml
+lrcmux_sources = ["!kugou"]
+```
+
+Either a list to allow or a list to exclude, never a mix — an allow-list already
+excludes everything it does not name. The order is not a preference: asking
+lrcmux for `musixmatch,kugou` and for `kugou,musixmatch` returns the same
+answer, because it ranks its upstreams itself. `[]` lets it choose freely.
+
+KuGou is excluded by default, and it is worth being precise about why, because
+it is not the usual complaint about timing. Across 111 tracks, KuGou's words
+overlapped known-good lyrics with a median Jaccard of 0.86 against Musixmatch's
+0.97, and its lower quartile ran down to 0.20 — whole songs of the wrong words,
+confidently timed, which is what an automatic transcription of English by a
+Chinese service looks like. A wrong offset can be nudged back into place; wrong
+words cannot. And since lrcmux prefers KuGou when both have an answer, nothing
+short of excluding it helps. It is only *excluded*, so a track KuGou alone would
+have covered now falls through to LRCLIB's line-level lyrics rather than to
+nothing. `lyrics status` names the upstream that answered.
+
+Musixmatch, the upstream that usually answers in its place, has the opposite
+problem: the words are right and the whole document is sometimes timed against a
+different master, out by two or three seconds from the first line to the last.
+That is one shift, so `<` and `>` fix it in three keypresses and the correction
+is saved against the song. Deriving that shift automatically — aligning against
+LRCLIB's line timings and correcting by the offset — was tried and abandoned: at
+a confidence threshold tight enough to be safe it fired on 2 of 78 tracks, and
+loosening it started "correcting" songs where LRCLIB was the one that was wrong.
+
 That order is a prediction about what each source is usually good at, and it is
 not taken on trust. Only word timings end the search: a provider that answers a
 line at a time is held as a fallback and the next one is asked anyway, so an
@@ -232,6 +268,12 @@ Apple document that happens to be line-level cannot step over word timings
 lrcmux was holding all along. The fallback is returned once nothing better has
 turned up, and the first one found wins, which keeps the order above deciding
 between answers of equal quality.
+
+One kind of answer is not held as a fallback at all but stepped over as if the
+provider had said "not here": lyrics whose last line starts more than fifteen
+seconds after the song has ended. Those were timed against a longer recording,
+which means every line before it is shifted too — a real answer about the wrong
+edit, and worse than the line-level one underneath it.
 
 The same reasoning reaches the cache. A word-timed hit is kept indefinitely,
 since nothing better is coming for it, but a line-level hit expires after a day

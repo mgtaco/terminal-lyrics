@@ -6,7 +6,8 @@ whatever the local music player is playing. Crate `terminal-lyrics`, binary
 (`origin`, branch `main`). MIT.
 
 Lyrics come from four providers tried in order (AMLL, LyricsPlus, lrcmux,
-LRCLIB), with a local `--lrc-dir` and the cache ahead of them. The player is
+LRCLIB), with a local `--lrc-dir` and the cache ahead of them. lrcmux is itself
+five upstreams, filtered by `lrcmux_sources`. The player is
 reached through one seam in `src/player/`, with exactly one backend compiled per
 target: MPRIS over D-Bus on Linux, osascript against Spotify and Apple Music on
 macOS, a stub on Windows, and a scripted fake for tests.
@@ -28,6 +29,19 @@ provider ordering and matching in full.
 - Player picking stays platform-neutral: playing beats has-a-track beats
   anything else, name as tiebreak.
 - Nothing interpolated (e.g. the sweep highlight) is ever written to disk.
+- lrcmux does not percent-decode its `sources` parameter, so that one is
+  appended to the URL by hand: `%21kugou` restricts the fanout to nothing and
+  answers 404, which is indistinguishable from the service being down.
+- lrcmux ranks its own upstreams and ignores the order in `sources`, so
+  `lrcmux_sources` is a filter, not a preference — allow-list or deny-list,
+  never a mix. KuGou is excluded by default because it answers with the wrong
+  *words*, which no offset can fix; the fix for a wrong *offset* is the nudge
+  keys, and deriving one automatically from LRCLIB was measured and is not
+  reliable enough (see the README). Anything changing which upstream can answer
+  needs a `CACHE_VERSION` bump: word-timed entries never expire.
+- An answer whose last line starts past the end of the track is stepped over in
+  `first_hit`, not held as a fallback — it is a real answer about another edit.
+  It lives there rather than in a provider so no provider can forget it.
 - The sweep says which word of the line is being sung, so `Sweep::Auto` wants
   both halves of that: real word timings, and the rest of the line to point at.
   One word at a time supplies the answer on its own, so auto turns itself off
@@ -43,7 +57,7 @@ provider ordering and matching in full.
 ## Working on it
 
 ```bash
-cargo test                              # 182 tests, no terminal or player needed
+cargo test                              # 198 tests, no terminal or player needed
 cargo clippy --all-targets -- -D warnings
 cargo run --example pump_dump -- 15     # dump the live player event stream
 lyrics status                           # what it sees: player, track, source

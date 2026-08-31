@@ -180,3 +180,121 @@ fn words_that_do_not_add_up_to_the_line_leave_the_line_intact() {
     assert_eq!(found.raw, "[00:01.000]One two three\n");
     assert_eq!(lrc::parse(&found.raw).lines[0].text, "One two three");
 }
+
+/// The upstream filter, which is what keeps KuGou's confidently-timed wrong
+/// words off the screen. Parsing is the whole of it: the value goes straight
+/// out as lrcmux's own `sources` parameter.
+mod sources {
+    use terminal_lyrics::lyrics::lrcmux::Sources;
+
+    fn parse(s: &str) -> Sources {
+        s.parse().expect("should parse")
+    }
+
+    #[test]
+    fn the_default_is_a_deny_list_and_survives_a_round_trip() {
+        let d: Sources = Sources::DEFAULT.parse().expect("the default must parse");
+        assert_eq!(d.param().as_deref(), Some("!kugou"));
+        assert_eq!(d.to_string().parse::<Sources>().unwrap(), d);
+    }
+
+    #[test]
+    fn an_empty_filter_sends_no_parameter_at_all() {
+        // Not `sources=`, which would be a filter allowing nothing.
+        assert_eq!(Sources::any().param(), None);
+        assert_eq!(parse("").param(), None);
+        assert_eq!(parse("  ,  ,").param(), None);
+    }
+
+    #[test]
+    fn names_are_normalised_but_not_checked_against_a_list() {
+        // The set of upstreams belongs to the server — it has both grown and
+        // shrunk — so an unrecognised name is passed through rather than
+        // rejected. `lyrics status` names whoever actually answered.
+        assert_eq!(
+            parse(" MusixMatch , ytmusic ").param().as_deref(),
+            Some("musixmatch,ytmusic")
+        );
+        assert_eq!(
+            parse("somethingnew").param().as_deref(),
+            Some("somethingnew")
+        );
+    }
+
+    #[test]
+    fn allow_and_deny_forms_cannot_be_mixed() {
+        // An allow-list already excludes everything it does not name, so a mix
+        // means the user expects one half to do something it cannot.
+        assert!("musixmatch,!kugou".parse::<Sources>().is_err());
+        assert!("!kugou,musixmatch".parse::<Sources>().is_err());
+        assert!(parse("!kugou,!genius").param().is_some());
+        assert!(parse("musixmatch,ytmusic").param().is_some());
+    }
+
+    #[test]
+    fn a_name_that_would_not_survive_the_wire_is_rejected() {
+        // A bare `!`, or a name with a separator inside it, would arrive at the
+        // server as something the user never wrote.
+        assert!("!".parse::<Sources>().is_err());
+        assert!("mux match".parse::<Sources>().is_err());
+    }
+}
+
+/// How the request is spelled, which is load-bearing in a way that is invisible
+/// from the outside: a filter the server misreads restricts it to *nothing* and
+/// answers 404, which looks exactly like lrcmux being down.
+mod request {
+    use terminal_lyrics::lyrics::lrcmux::{self, Sources};
+    use terminal_lyrics::player::Track;
+
+    fn track() -> Track {
+        Track {
+            id: String::new(),
+            title: "Hot N Cold".to_string(),
+            artist: "Katy Perry".to_string(),
+            album: None,
+            length: None,
+        }
+    }
+
+    fn query(sources: &str) -> String {
+        let s: Sources = if sources.is_empty() {
+            Sources::any()
+        } else {
+            sources.parse().expect("should parse")
+        };
+        lrcmux::request_url("https://api.lrcmux.dev", &s, &track())
+            .expect("should build")
+            .query()
+            .unwrap_or_default()
+            .to_string()
+    }
+
+    #[test]
+    fn the_exclusion_marker_is_sent_literally_not_percent_encoded() {
+        // The bug this test exists for. lrcmux does not percent-decode
+        // `sources`, so `%21kugou` is an upstream by that name, nothing
+        // matches, and every lookup comes back 404.
+        let q = query("!kugou");
+        assert!(q.ends_with("sources=!kugou"), "got {q}");
+        assert!(!q.contains("%21"), "the `!` must survive the wire: {q}");
+    }
+
+    #[test]
+    fn an_empty_filter_adds_no_parameter() {
+        let q = query("");
+        assert!(!q.contains("sources"), "got {q}");
+    }
+
+    #[test]
+    fn everything_else_is_still_escaped_normally() {
+        // Only `sources` skips the encoder; a slash in an artist name must not
+        // ride along unescaped into the path.
+        let mut t = track();
+        t.artist = "AC/DC".to_string();
+        t.title = "T.N.T.".to_string();
+        let url = lrcmux::request_url("https://api.lrcmux.dev/", &Sources::any(), &t).unwrap();
+        assert_eq!(url.path(), "/get", "the base's trailing slash is trimmed");
+        assert!(url.query().unwrap().contains("artist=AC%2FDC"), "got {url}");
+    }
+}

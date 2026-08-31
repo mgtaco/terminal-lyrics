@@ -1,10 +1,17 @@
-//! lrcmux: one API in front of Musixmatch richsync, KuGou, NetEase, Genius and
+//! lrcmux: one API in front of Musixmatch richsync, KuGou, LRCLIB, Genius and
 //! YouTube Music.
 //!
 //! Where AMLL is deep and narrow — a couple of thousand tracks, always
 //! word-timed — this is wide and uneven. It answers for most things, and
 //! `meta.level` says outright whether the answer carries word timings, so
 //! nothing has to be sniffed.
+//!
+//! The upstreams are not equally good, and lrcmux picks between them itself:
+//! asking for `musixmatch,kugou` and for `kugou,musixmatch` returns the same
+//! answer, so the order of [`Sources`] is not a preference the server honours.
+//! What it does honour is the set — which is why the knob is a filter rather
+//! than a ranking, and why the default excludes one upstream outright. See
+//! [`Sources::DEFAULT`].
 //!
 //! The upstreams do not agree on how a word is written, and the difference is
 //! invisible until it is on screen:
@@ -29,6 +36,113 @@ use serde::Deserialize;
 use super::{Found, MAX_DURATION_DELTA, Source, ttml};
 use crate::lrc;
 use crate::player::Track;
+
+/// Which of lrcmux's upstreams to let answer.
+///
+/// The server takes a `sources` parameter that is either an allow-list
+/// (`musixmatch,ytmusic`) or a deny-list (`!kugou`), never a mix of the two —
+/// so this refuses a mix rather than sending something the server has to guess
+/// at. An empty list sends no parameter at all and lets lrcmux choose freely.
+///
+/// The names themselves are *not* checked against a fixed set: the list of
+/// upstreams belongs to the server and grew and shrank twice while this file
+/// was being written. `lyrics status` names the upstream that actually
+/// answered, which is the honest way to find out whether a name did anything.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Sources(Vec<String>);
+
+impl Sources {
+    /// KuGou excluded, everything else allowed.
+    ///
+    /// Measured over 111 tracks, KuGou's lyrics overlapped known-good words
+    /// with a median Jaccard of 0.86 against Musixmatch's 0.97, and its lower
+    /// quartile ran down to 0.20 — whole songs of confidently wrong words,
+    /// which is what an automatic transcription of English by a Chinese service
+    /// looks like. Wrong words cannot be nudged back into place the way a wrong
+    /// offset can, and lrcmux prefers KuGou when both answer, so excluding it
+    /// is the only thing that helps. Anyone who wants it back names it in the
+    /// config.
+    pub const DEFAULT: &'static str = "!kugou";
+
+    /// Everything lrcmux is willing to serve.
+    pub fn any() -> Self {
+        Sources(Vec::new())
+    }
+
+    /// The `sources` query parameter, or `None` to leave it off entirely.
+    pub fn param(&self) -> Option<String> {
+        (!self.0.is_empty()).then(|| self.0.join(","))
+    }
+
+    pub fn names(&self) -> &[String] {
+        &self.0
+    }
+}
+
+impl std::str::FromStr for Sources {
+    type Err = String;
+
+    /// Comma-separated, each name optionally `!`-prefixed to exclude it.
+    fn from_str(s: &str) -> std::result::Result<Self, String> {
+        Sources::try_from(
+            s.split(',')
+                .map(|n| n.trim().to_string())
+                .filter(|n| !n.is_empty())
+                .collect::<Vec<_>>(),
+        )
+    }
+}
+
+impl TryFrom<Vec<String>> for Sources {
+    type Error = String;
+
+    fn try_from(names: Vec<String>) -> std::result::Result<Self, String> {
+        let mut cleaned = Vec::new();
+        for name in names {
+            let name = name.trim().to_ascii_lowercase();
+            if name.is_empty() {
+                continue;
+            }
+            let bare = name.strip_prefix('!').unwrap_or(&name);
+            if bare.is_empty() {
+                return Err("`!` needs an upstream name after it".to_string());
+            }
+            // A name with a comma in it would split into two on the wire and
+            // mean something the user never wrote.
+            if bare.contains([',', ' ']) {
+                return Err(format!(
+                    "`{name}` is not one upstream name; list them separately"
+                ));
+            }
+            cleaned.push(name);
+        }
+        // Mixing the two forms is not a stricter filter, it is a contradiction:
+        // an allow-list already excludes everything it does not name.
+        let excluding = cleaned.iter().filter(|n| n.starts_with('!')).count();
+        if excluding != 0 && excluding != cleaned.len() {
+            return Err(
+                "lrcmux sources are either all excluded (`!kugou`) or all allowed \
+                 (`musixmatch`), not a mix of both"
+                    .to_string(),
+            );
+        }
+        Ok(Sources(cleaned))
+    }
+}
+
+impl<'de> Deserialize<'de> for Sources {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Self, D::Error> {
+        Vec::<String>::deserialize(d)?
+            .try_into()
+            .map_err(serde::de::Error::custom)
+    }
+}
+
+impl std::fmt::Display for Sources {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0.join(","))
+    }
+}
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Response {
@@ -162,7 +276,11 @@ pub fn to_enhanced_lrc(resp: &Response) -> Option<String> {
 
 /// Ask lrcmux for one track. `Ok(None)` is a real miss, or an answer with no
 /// timings worth showing; the chain then moves on to the next provider.
-pub async fn fetch(http: &reqwest::Client, base: &str, track: &Track) -> Result<Option<Found>> {
+/// The URL one lookup is made against.
+///
+/// Split out from [`fetch`] because one detail of it is load-bearing and
+/// invisible: see the `sources` handling below.
+pub fn request_url(base: &str, sources: &Sources, track: &Track) -> Result<reqwest::Url> {
     let mut params: Vec<(&str, String)> = vec![
         ("artist", track.artist.clone()),
         ("title", track.title.clone()),
@@ -174,9 +292,34 @@ pub async fn fetch(http: &reqwest::Client, base: &str, track: &Track) -> Result<
         params.push(("duration", format!("{}", d.round() as i64)));
     }
 
+    let mut url = reqwest::Url::parse(&format!("{}/get", base.trim_end_matches('/')))
+        .context("lrcmux base URL is not a URL")?;
+    url.query_pairs_mut().extend_pairs(&params);
+
+    // `sources` is appended by hand rather than through `query_pairs_mut`,
+    // which form-encodes `!` to `%21`. lrcmux does not percent-decode this one
+    // parameter: it reads `%21kugou` as an upstream literally called that,
+    // matches none, restricts the fanout to nothing and answers 404 — so the
+    // filter would silently turn lrcmux off altogether instead of narrowing it,
+    // which looks from the outside exactly like the service being down.
+    // `Url::set_query` leaves `!` and `,` alone, and `Sources` has already
+    // refused anything else that would need encoding.
+    if let Some(s) = sources.param() {
+        let rest = url.query().unwrap_or_default().to_string();
+        let sep = if rest.is_empty() { "" } else { "&" };
+        url.set_query(Some(&format!("{rest}{sep}sources={s}")));
+    }
+    Ok(url)
+}
+
+pub async fn fetch(
+    http: &reqwest::Client,
+    base: &str,
+    sources: &Sources,
+    track: &Track,
+) -> Result<Option<Found>> {
     let resp = http
-        .get(format!("{}/get", base.trim_end_matches('/')))
-        .query(&params)
+        .get(request_url(base, sources, track)?)
         .send()
         .await
         .context("lrcmux request failed")?;

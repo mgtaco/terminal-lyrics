@@ -28,7 +28,7 @@ network = true
 #
 #   amll        the AMLL TTML database, syllable-timed, keyed by Spotify ID
 #   lyricsplus  Apple Music's TTML, syllable-timed, matched by artist/title
-#   lrcmux      Musixmatch, KuGou, NetEase, Genius, YouTube Music — word-timed
+#   lrcmux      Musixmatch, KuGou, YouTube Music, Genius, LRCLIB — word-timed
 #   lrclib      millions of tracks, line-level only
 #
 # The default order puts the best-looking source first and the widest last, so
@@ -41,6 +41,27 @@ providers = ["amll", "lyricsplus", "lrcmux", "lrclib"]
 # them.
 lyricsplus_url = "https://lyricsplus.prjktla.my.id"
 lrcmux_url = "https://api.lrcmux.dev"
+
+# Which of lrcmux's own upstreams may answer. lrcmux ranks them itself and
+# ignores the order you write here, so this is a filter rather than a
+# preference: either a list to allow, or a list to exclude with `!` in front of
+# every name. `[]` lets lrcmux choose freely.
+#
+#   ["!kugou"]                 everything except KuGou (the default)
+#   ["musixmatch", "ytmusic"]  only these two
+#   []                         whatever lrcmux likes
+#
+# KuGou is excluded by default because it answers with the wrong words — not
+# the wrong timings, the wrong song, transcribed rather than sourced, which no
+# amount of nudging can fix. Measured over a hundred tracks its lyrics matched
+# known-good words far less often than Musixmatch's, and lrcmux prefers it when
+# both have an answer. Everything else stays on: it is only excluded, so a
+# track KuGou alone would have covered falls through to LRCLIB's line-level
+# lyrics rather than to nothing.
+#
+# `lyrics status` names the upstream that actually answered, which is how to
+# tell whether a name here did anything.
+lrcmux_sources = ["!kugou"]
 
 # Show one word at a time when the lyrics carry real per-word timings.
 # Lines without word timings are always shown whole.
