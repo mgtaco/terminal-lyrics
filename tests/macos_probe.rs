@@ -6,7 +6,6 @@
 //! in `parse_probe`. These are the decisions.
 #![cfg(target_os = "macos")]
 
-use terminal_lyrics::lyrics::amll::spotify_track_id;
 use terminal_lyrics::player::macos::{ProbeError, parse_probe};
 
 /// name, state, position ms, duration ms, id, title, artist, album.
@@ -42,7 +41,7 @@ fn a_spotify_row_becomes_a_track_with_seconds_not_milliseconds() {
 }
 
 #[test]
-fn the_spotify_id_survives_intact_and_is_a_valid_amll_key() {
+fn the_spotify_id_survives_intact() {
     let out = parse_probe(&row(&[
         "spotify",
         "playing",
@@ -54,14 +53,12 @@ fn the_spotify_id_survives_intact_and_is_a_valid_amll_key() {
         "",
     ]));
     let track = out[0].result.as_ref().unwrap().track.as_ref().unwrap();
+    // The saved sync nudges are keyed by it.
     assert_eq!(track.id, "spotify:track:2Ih217RCGAmyQR68Nn7Cqo");
-    // This is the whole reason the macOS backend drives Spotify by AppleScript:
-    // the id it hands back is the word-timed database's lookup key.
-    assert_eq!(spotify_track_id(&track.id), Some("2Ih217RCGAmyQR68Nn7Cqo"));
 }
 
 #[test]
-fn a_music_row_keeps_its_persistent_id_as_the_cache_key() {
+fn a_music_row_keeps_its_persistent_id_as_the_track_id() {
     let out = parse_probe(&row(&[
         "music",
         "playing",
@@ -74,8 +71,6 @@ fn a_music_row_keeps_its_persistent_id_as_the_cache_key() {
     ]));
     let track = out[0].result.as_ref().unwrap().track.as_ref().unwrap();
     assert_eq!(track.id, "A1B2C3D4E5F60718");
-    // Nothing to look up in AMLL: that path is Spotify-only.
-    assert_eq!(spotify_track_id(&track.id), None);
 }
 
 #[test]
