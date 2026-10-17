@@ -186,7 +186,10 @@ fn a_background_marker_is_a_second_voice_not_body_text() {
     assert_eq!(l.lines.len(), 1, "a backing vocal is not a line of its own");
     assert_eq!(l.lines[0].text, "I will always love you");
     let second = &l.lines[0].secondary[0];
-    assert_eq!(second.text, "ooh ooh", "the brackets are not part of the words");
+    assert_eq!(
+        second.text, "ooh ooh",
+        "the brackets are not part of the words"
+    );
     assert!(second.background);
     assert!((second.start - 11.0).abs() < 0.001);
     assert!((second.end - 13.0).abs() < 0.001);
