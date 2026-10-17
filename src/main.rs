@@ -5,10 +5,12 @@ use std::time::Duration;
 use anyhow::Result;
 use clap::Parser;
 
+use std::sync::Arc;
 use terminal_lyrics::cli::{Cli, Command};
 use terminal_lyrics::config::{self, ColorSource, Config, ConfigFile};
+
 use terminal_lyrics::lyrics::cache::Cache;
-use terminal_lyrics::lyrics::{self, Net, Outcome, Source};
+use terminal_lyrics::lyrics::{self, Engine, Outcome};
 use terminal_lyrics::offsets::Offsets;
 use terminal_lyrics::player::{Session, Track};
 use terminal_lyrics::tui;
@@ -53,77 +55,60 @@ async fn main() -> Result<()> {
             title,
             album,
             duration,
-            spotify_id,
-        }) => {
-            cmd_fetch(
-                &cfg,
-                &artist,
-                &title,
-                album.as_deref(),
-                duration,
-                spotify_id.as_deref(),
-            )
-            .await
-        }
+            json,
+        }) => cmd_fetch(&cfg, &artist, &title, album.as_deref(), duration, json).await,
         Some(Command::Status) => cmd_status(&cfg).await,
         None => cmd_run(cfg).await,
     }
 }
 
-fn client_for(cfg: &Config) -> Result<Option<Net>> {
-    if cfg.network {
-        Ok(Some(Net::new(
-            cfg.lyricsplus_url.clone(),
-            cfg.lrcmux_url.clone(),
-            cfg.lrcmux_sources.clone(),
-        )?))
-    } else {
-        Ok(None)
-    }
+fn engine() -> Result<Arc<Engine>> {
+    Ok(Arc::new(Engine::new(Cache::new(config::cache_dir()))?))
 }
 
 /// Headless lookup, so the fetch path can be exercised without a player.
 ///
-/// This runs the same provider chain the live path does, on a `Track` built
-/// from the flags — one chain, so a bug found here is the bug the visualiser
-/// has too.
+/// This runs the same lookup the live path does, on a `Track` built from the
+/// flags, so a bug found here is the bug the visualiser has too.
 async fn cmd_fetch(
     cfg: &Config,
     artist: &str,
     title: &str,
     album: Option<&str>,
     duration: Option<f64>,
-    spotify_id: Option<&str>,
+    json: bool,
 ) -> Result<()> {
-    let Some(client) = client_for(cfg)? else {
+    if !cfg.network {
         anyhow::bail!("--no-network is set, so there is nothing to fetch from");
-    };
+    }
 
     let track = Track {
-        // AMLL is keyed by this, so passing `--spotify-id` is what puts it in
-        // play; without one the chain simply skips it.
-        id: spotify_id.unwrap_or_default().to_string(),
         title: title.to_string(),
         artist: artist.to_string(),
         album: album.map(str::to_string),
         length: duration,
+        ..Default::default()
     };
 
-    match lyrics::first_hit(&client, &cfg.providers, &track).await? {
-        Some(found) => {
+    match lyrics::lookup(&engine()?, &cfg.providers, &track, true).await? {
+        Outcome::Found(found) => {
             eprintln!(
                 "# {} · {} · {} lines",
                 found.source,
                 if found.synced { "synced" } else { "unsynced" },
                 found.lyrics.lines.len()
             );
+            if json && let Some(answer) = &found.answer {
+                println!("{}", serde_json::to_string_pretty(&answer.lyrics)?);
+                return Ok(());
+            }
             print!("{}", found.raw);
             if !found.raw.ends_with('\n') {
                 println!();
             }
             Ok(())
         }
-        None => {
+        Outcome::Missing => {
             eprintln!("no lyrics found for {artist} — {title}");
             std::process::exit(1);
         }
@@ -196,7 +181,7 @@ async fn cmd_status(cfg: &Config) -> Result<()> {
             .map(|d| format!("{d:.2}s"))
             .unwrap_or_else(|| "(not reported)".into())
     );
-    println!("cache key {}", track.id);
+    println!("track id  {}", track.id);
     match Offsets::new(config::offsets_path()).get(&track.id) {
         Some(ms) => println!("tuned     {ms:+}ms  (saved for this song)"),
         None => println!("tuned     no  (using the default above)"),
@@ -226,7 +211,6 @@ async fn cmd_status(cfg: &Config) -> Result<()> {
         }
     );
 
-    let cache = Cache::new(config::cache_dir());
     if let Some(dir) = cfg.lrc_dir.as_deref()
         && let Some(found) = terminal_lyrics::lyrics::local_lookup(dir, &track)
     {
@@ -234,19 +218,19 @@ async fn cmd_status(cfg: &Config) -> Result<()> {
         return Ok(());
     }
 
-    let Some(client) = client_for(cfg)? else {
-        println!("lyrics    (network disabled)");
-        return Ok(());
-    };
-
-    match lyrics::lookup(&client, &cfg.providers, &cache, &track).await? {
-        Outcome::Found(found) => {
-            report_lyrics(cfg, &found);
-            if matches!(found.source, Source::LrcLib { .. }) {
-                println!("          (now cached)");
-            }
-        }
-        Outcome::Missing => println!("lyrics    (none found)"),
+    let engine = engine()?;
+    println!(
+        "cache     {}",
+        engine
+            .cache()
+            .dir()
+            .map(|d| d.display().to_string())
+            .unwrap_or_else(|| "(unavailable)".into())
+    );
+    match lyrics::lookup(&engine, &cfg.providers, &track, cfg.network).await? {
+        Outcome::Found(found) => report_lyrics(cfg, &found),
+        Outcome::Missing if cfg.network => println!("lyrics    (none found)"),
+        Outcome::Missing => println!("lyrics    (none cached; network disabled)"),
     }
     Ok(())
 }
@@ -294,11 +278,10 @@ async fn cmd_run(cfg: Config) -> Result<()> {
     let control = session.connect(&name).await?;
     let (events, pump) = handle.spawn(POLL_INTERVAL);
 
-    let cache = Cache::new(config::cache_dir());
-    let client = client_for(&cfg)?;
+    let engine = engine()?;
     let offsets = Offsets::new(config::offsets_path());
 
-    let result = tui::run(cfg, control, events, cache, client, offsets).await;
+    let result = tui::run(cfg, control, events, engine, offsets).await;
     pump.abort();
     result
 }

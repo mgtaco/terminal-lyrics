@@ -9,10 +9,8 @@
 //! What it does not report is any stable identifier for the track. There is no
 //! `spotify:track:<id>` here the way there is in Spotify's AppleScript
 //! dictionary and its MPRIS metadata, so [`Track::id`] falls back to
-//! artist-and-title. That costs exactly one provider: [`crate::lyrics::amll`] is
-//! keyed by Spotify ID and will be stepped over. `lyricsplus` and `lrcmux` match
-//! on artist and title, so word-by-word lyrics — the point of the program —
-//! still work here.
+//! artist-and-title. That costs nothing for lyrics: every provider matches on
+//! artist, title, album and length, which SMTC does report.
 //!
 //! Two things are worth knowing about the edge:
 //!
@@ -156,6 +154,7 @@ pub fn parse_sessions(raw: &[RawSession]) -> Vec<Probe> {
             // "zero seconds long", and a bogus length would put every LRCLIB
             // candidate outside the duration window.
             length: (r.end_ticks > 0).then(|| seconds(r.end_ticks)),
+            url: None,
         });
 
         let probe = Probe {

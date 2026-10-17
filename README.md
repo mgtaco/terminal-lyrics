@@ -7,7 +7,7 @@
 [![crates.io](https://img.shields.io/crates/v/terminal-lyrics?style=flat-square&color=B7410E&logo=rust&logoColor=white)](https://crates.io/crates/terminal-lyrics)
 [![Latest release](https://img.shields.io/github/v/release/mgtaco/terminal-lyrics?style=flat-square&label=release&color=2EA44F&logo=github&logoColor=white)](https://github.com/mgtaco/terminal-lyrics/releases/latest)
 [![platform: Linux | macOS | Windows](docs/badges/platform.svg)](#platforms)
-[![Four lyrics sources](https://img.shields.io/badge/lyrics-4_synced_sources-0EA5E9?style=flat-square)](#how-it-works)
+[![Six lyrics sources](https://img.shields.io/badge/lyrics-6_synced_sources-0EA5E9?style=flat-square)](#how-it-works)
 [![MIT licence](https://img.shields.io/github/license/mgtaco/terminal-lyrics?style=flat-square&color=8A2BE2)](LICENSE)
 
 ![Word-timed lyrics appearing one word at a time, a long word building up syllable by syllable](docs/demo.gif)
@@ -22,7 +22,7 @@ library to scan, no pre-processing pass to sit through, and no Python
 environment to build first.
 
 It follows the player over MPRIS on Linux — AppleScript on macOS, the system
-media controls on Windows — and pulls synced lyrics from four sources, drawn one
+media controls on Windows — and pulls synced lyrics from six sources, drawn one
 word at a time wherever the timings allow it.
 
 ## Install
@@ -130,7 +130,6 @@ The flags worth knowing:
 | `--lrc-dir ~/lyrics` | prefer your own `Artist - Title.lrc` files |
 | `--no-network` | use only those files and the cache |
 | `--offset-ms -250` | starting point for every song you have not tuned by hand |
-| `--lrcmux-sources all` | let lrcmux use every upstream, KuGou included |
 | `--color-source pywal` | take one accent colour from a palette |
 
 ## Without the TUI
@@ -138,8 +137,7 @@ The flags worth knowing:
 ```bash
 lyrics status                 # player, track, position, and which source matched
 lyrics fetch --artist "Radiohead" --title "Creep" --duration 238
-lyrics fetch --artist "Kanye West" --title "Flashing Lights" \
-             --spotify-id 5TRPicyLGbAF2LGBFbHGvO   # word-timed, via AMLL
+lyrics fetch --artist "Daft Punk" --title "Get Lucky" --json   # what DMS caches
 lyrics paths                  # where the config, cache and saved offsets live
 ```
 
@@ -204,97 +202,60 @@ despite AppleScript having no seek notification to offer.
 
 ### Sources
 
-`--lrc-dir` first, then the cache, then four networks in order. The order is by
-what each is good at rather than by how often it answers, so a better-looking
-set of lyrics is never passed over for a merely likelier one:
+The lookup is DankMaterialShell's, ported line for line from its Go library
+([dankgo/lyrics](https://github.com/AvengeMedia/dankgo)), so that `lyrics` and
+the DMS lyrics widget pick the same lyrics for the same song and stay in step
+when both are on screen. They also share one cache: when
+`~/.cache/DankMaterialShell` exists, lyrics are cached in its `lyrics/`
+directory, in the same files and the same format, so whichever of the two looks
+a song up first answers for the other.
+
+Ahead of the network sit your own `--lrc-dir` files and, for a local file the
+player hands over as a `file://` URL, a lyrics file next to it: `song.lyricsfile.yaml`,
+`song.ttml`, `song.lrc` or `song.LRC`, in that order. Then six providers:
 
 | source | timing | |
 | --- | :-: | --- |
-| [AMLL TTML DB](https://github.com/amll-dev/amll-ttml-db) | syllable | CC0 and community-maintained, keyed by the Spotify track ID the player already hands us, so it needs neither a search nor any matching guesswork. It holds about 2,400 entries, so it costs one request and misses often — but when it hits, nothing else needs asking |
-| [LyricsPlus](https://github.com/ibratabian17/lyricsplus) | syllable | Apple Music's own TTML, which splits a long word into pieces the display then builds up in place. Matched on artist and title, with the length Apple records in the document used to throw out a different edit. Its `platformId=spotify:…` parameter is not used: the public instance has no Spotify credentials to resolve an ID with, and answers every such query 404 |
-| [lrcmux](https://github.com/f1nniboy/lrcmux) | word | one API in front of Musixmatch richsync, KuGou, YouTube Music, Genius and LRCLIB, and the widest of the four: five upstreams means it degrades rather than dies. It says outright whether the answer it found carries word timings, and which upstream they came from |
-| [LRCLIB](https://lrclib.net) | line | millions of tracks, but line-level timing only. Every one of the 923 `syncedLyrics` entries sampled was line-level, which is why it is asked last rather than first |
-
-LyricsPlus and lrcmux are small community-run instances, and both projects
-document self-hosting, so both base URLs are configurable — as is the list
-itself, which doubles as the on/off switch:
+| [BetterLyrics](https://better-lyrics.boidu.dev) | syllable | Apple Music's TTML, matched on title, artist, album and length |
+| [Unison](https://unison.betterlyrics.org) | syllable | BetterLyrics' community-submitted lyrics, TTML or enhanced LRC |
+| [LyricsPlus](https://github.com/ibratabian17/lyricsplus) | syllable | JSON with per-syllable timing and backing vocals marked word by word |
+| KuGou | word | its KRC format, decrypted and inflated; translations baked into the lyrics are dropped |
+| [LRCLIB](https://lrclib.net) | line | millions of tracks, line-level nearly always, now and then a word-timed Lyricsfile |
+| YouTube Music | line | the lyrics YouTube Music shows, found through its own search |
 
 ```toml
-providers = ["amll", "lyricsplus", "lrcmux", "lrclib"]
+providers = ["betterlyrics", "unison", "lyricsplus", "kugou", "lrclib", "youtubemusic"]
 ```
 
-Dropping a name skips that provider; the order of the list is the order they are
-consulted in. A provider that is down is logged and stepped over, because losing
-LRCLIB's line-level answer to somebody's server being unreachable would be the
-worst trade available. A lookup only fails outright when every provider failed
-and none of them managed to say "not here".
+Dropping a name turns that provider off, and the order is their priority. They
+are all asked at once, and the answer is chosen in two steps: better timing
+first (word over line over plain), then priority among answers that are equally
+good. So a fast line-level answer from LRCLIB is held while a word-timed
+provider is still out, and a fast word-timed answer from low in the list is held
+while one ahead of it could still match it. Once priority alone has a winner,
+the wait for better timing is two seconds at most, and the whole lookup twelve.
+A provider that is down is stepped over; the lookup only fails when every
+provider failed and none of them managed to say "not here". Lyrics with no
+timing at all are not shown.
 
-lrcmux is five sources wearing one coat, and they are not equally good, so it
-has a filter of its own:
-
-```toml
-lrcmux_sources = ["!kugou"]
-```
-
-Either a list to allow or a list to exclude, never a mix — an allow-list already
-excludes everything it does not name. The order is not a preference: asking
-lrcmux for `musixmatch,kugou` and for `kugou,musixmatch` returns the same
-answer, because it ranks its upstreams itself. `[]` lets it choose freely.
-
-KuGou is excluded by default, and it is worth being precise about why, because
-it is not the usual complaint about timing. Across 111 tracks, KuGou's words
-overlapped known-good lyrics with a median Jaccard of 0.86 against Musixmatch's
-0.97, and its lower quartile ran down to 0.20 — whole songs of the wrong words,
-confidently timed, which is what an automatic transcription of English by a
-Chinese service looks like. A wrong offset can be nudged back into place; wrong
-words cannot. And since lrcmux prefers KuGou when both have an answer, nothing
-short of excluding it helps. It is only *excluded*, so a track KuGou alone would
-have covered now falls through to LRCLIB's line-level lyrics rather than to
-nothing. `lyrics status` names the upstream that answered.
-
-Musixmatch, the upstream that usually answers in its place, has the opposite
-problem: the words are right and the whole document is sometimes timed against a
-different master, out by two or three seconds from the first line to the last.
-That is one shift, so `<` and `>` fix it in three keypresses and the correction
-is saved against the song. Deriving that shift automatically — aligning against
-LRCLIB's line timings and correcting by the offset — was tried and abandoned: at
-a confidence threshold tight enough to be safe it fired on 2 of 78 tracks, and
-loosening it started "correcting" songs where LRCLIB was the one that was wrong.
-
-That order is a prediction about what each source is usually good at, and it is
-not taken on trust. Only word timings end the search: a provider that answers a
-line at a time is held as a fallback and the next one is asked anyway, so an
-Apple document that happens to be line-level cannot step over word timings
-lrcmux was holding all along. The fallback is returned once nothing better has
-turned up, and the first one found wins, which keeps the order above deciding
-between answers of equal quality.
-
-One kind of answer is not held as a fallback at all but stepped over as if the
-provider had said "not here": lyrics whose last line starts more than fifteen
-seconds after the song has ended. Those were timed against a longer recording,
-which means every line before it is shifted too — a real answer about the wrong
-edit, and worse than the line-level one underneath it.
-
-The same reasoning reaches the cache. A word-timed hit is kept indefinitely,
-since nothing better is coming for it, but a line-level hit expires after a day
-like a miss does — often it only means the two hobby-run providers were
-unreachable for the minute that track was playing, and keeping it forever would
-make a brief outage permanent for whatever you happened to be listening to.
+Each provider keeps its own cache entry for each track, keyed on the artist,
+title and album folded to lower case and the length in whole seconds. A hit is
+kept until it is ninety days old; a miss is asked again after fourteen days, and
+a line-level hit from a provider that usually has word timings is asked again
+once after fourteen days in case it has them by then. `r` forgets every
+provider's entry for the song playing and asks again.
 
 ### Matching LRCLIB
 
-The lookup starts with an exact `/api/get` on artist, title, album and duration,
-retries without the album, falls back to a scored `/api/search`, and finally
-tries once more with decorations like `- Remastered 2011` and `(feat. …)`
-stripped from the title. Candidates more than five seconds away from the track's
-real length are rejected rather than displayed out of sync, and misses are cached
-for a day so that a track LRCLIB has never heard of is not queried again on every
-play.
+An exact `/api/get` on artist, title, album and length comes first. If that
+answers with plain lyrics or nothing, a title search follows, and the best record
+for the same title and artist within eight seconds of the track's length wins:
+word timing over line timing over plain, then the closest length.
 
 ### Word timing
 
 What appears on screen follows the lyrics rather than a preference. A source
-carrying real per-word timestamps — three of the four now do — is shown one word
+carrying real per-word timestamps — five of the six usually do — is shown one word
 at a time with each word appearing on its own timestamp, whereas a line-level
 source has nothing to split on and so is shown whole. Because that decision is
 made per line rather than per file, a file that carries tags on only some of its
@@ -364,9 +325,8 @@ Spotify and Apple Music through their scripting dictionaries, polled once a
 second. It knows those two by name rather than discovering players generally,
 because there is nothing left to discover with: the MediaRemote framework every
 now-playing tool used to call was restricted to entitled applications in macOS
-15.4. The trade is a fair one, since Spotify's dictionary hands back a
-`spotify:track:` ID, which is exactly the key the word-by-word database is stored
-under — so the best part of the program survives the crossing intact. Neither app
+15.4. Every provider matches on artist and title, so nothing about the lyrics
+is lost in the crossing. Neither app
 is ever launched by this program; one that is not already running simply is not
 listed.
 
@@ -375,25 +335,21 @@ listed.
 The System Media Transport Controls — the API behind the media flyout in the
 volume panel — polled like macOS. Like MPRIS and unlike AppleScript it discovers
 players rather than knowing them by name, so anything that registers a session
-can be followed. What it does not carry is a track ID, so AMLL is stepped over
-there; LyricsPlus and lrcmux match on artist and title, so word-by-word lyrics
-still work.
+can be followed. Every provider matches on artist and title, so word-by-word
+lyrics work there as well.
 
 ## Limitations
 
-* Word timings are still not universal. Three of the four sources carry them and
-  between them they cover most of what you are likely to play, but an obscure
-  track can still come back line-level from LRCLIB, with no moving highlight.
-  `lyrics status` says which source you got and whether it carried real word
-  timings.
-* Two of the four sources are one person's server each. They are configurable and
-  self-hostable for exactly that reason, and the lookup steps over one that is
-  down rather than failing — but a permanent disappearance would cost real
-  coverage.
-* Because AMLL is keyed by Spotify track ID, that one source only applies when
-  the player reports one. The other three match on artist and title, so they work
-  anywhere.
-* Anything held by none of the four will not be found, and pressing `r` will not
+* Word timings are still not universal. Five of the six sources usually carry
+  them, but an obscure track can still come back line-level from LRCLIB or
+  YouTube Music, with no moving highlight. `lyrics status` says which source you
+  got and whether it carried real word timings.
+* Most of the sources are community-run services, and some are unofficial APIs
+  that can change without notice. The lookup steps over one that is down rather
+  than failing, but a permanent disappearance would cost real coverage.
+* The lookup follows DankMaterialShell's, so a better match DMS would not pick is
+  not picked here either. That is the price of the two agreeing.
+* Anything held by none of the six will not be found, and pressing `r` will not
   conjure it into existence.
 * On Linux, only MPRIS players are visible, so anything that does not expose an
   MPRIS interface goes unnoticed. On Windows the equivalent is registering with
@@ -411,13 +367,12 @@ tacoproz1. This is a separate program written from scratch in Rust rather than a
 fork of that one, and it takes a different approach, with no music library to
 scan and no pre-processing pass.
 
-Lyrics come from [LRCLIB](https://lrclib.net), the
-[AMLL TTML database](https://github.com/amll-dev/amll-ttml-db) (CC0),
-[LyricsPlus](https://github.com/ibratabian17/lyricsplus) and
-[lrcmux](https://github.com/f1nniboy/lrcmux) (MIT). None of them is affiliated
-with this project, and the last two are run by individuals out of their own
-pockets — the LyricsPlus README says as much about its own hosting. If you lean
-on them, self-host: `lyricsplus_url` and `lrcmux_url` are there for it.
+The lyrics lookup is a port of DankMaterialShell's
+([dankgo/lyrics](https://github.com/AvengeMedia/dankgo), © Avenge Media LLC, MIT,
+see [licenses/dankgo-MIT.txt](licenses/dankgo-MIT.txt)), so that the two agree. Lyrics come from BetterLyrics and Unison,
+[LyricsPlus](https://github.com/ibratabian17/lyricsplus), KuGou,
+[LRCLIB](https://lrclib.net) and YouTube Music. None of them is affiliated with
+this project.
 
 The platform marks in `docs/icons/` are based on
 [Simple Icons](https://simpleicons.org) (CC0).

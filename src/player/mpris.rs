@@ -106,7 +106,11 @@ pub fn track_from_metadata(md: &HashMap<String, OwnedValue>) -> Option<Track> {
         .get("xesam:artist")
         .map(lenient_string_list)
         .unwrap_or_default();
-    let artist = artists.first().cloned().unwrap_or_default();
+    // Every artist, joined the way DankMaterialShell's player layer joins
+    // them: the lyrics lookup and its cache key are built from this, so it
+    // has to read the same.
+    let artist = artists.join(", ");
+    let first_artist = artists.first().cloned().unwrap_or_default();
 
     let album = md
         .get("xesam:album")
@@ -127,8 +131,9 @@ pub fn track_from_metadata(md: &HashMap<String, OwnedValue>) -> Option<Track> {
     // `s` on Spotify, `o` per spec.
     let trackid = md.get("mpris:trackid").and_then(lenient_string);
     let id = url
+        .clone()
         .or(trackid)
-        .unwrap_or_else(|| fallback_id(&artist, &title));
+        .unwrap_or_else(|| fallback_id(&first_artist, &title));
 
     Some(Track {
         id,
@@ -136,6 +141,7 @@ pub fn track_from_metadata(md: &HashMap<String, OwnedValue>) -> Option<Track> {
         artist,
         album,
         length,
+        url,
     })
 }
 

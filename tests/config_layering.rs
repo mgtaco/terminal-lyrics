@@ -35,10 +35,7 @@ word_by_word = false
 overlapping_voices = false
 tick_ms = 77
 resync_threshold_ms = 333
-providers = ["lrcmux", "lrclib"]
-lyricsplus_url = "https://lp.file"
-lrcmux_url = "https://mux.file"
-lrcmux_sources = ["musixmatch", "ytmusic"]
+providers = ["kugou", "lrclib"]
 "#;
 
 #[test]
@@ -65,7 +62,7 @@ fn defaults_apply_with_no_file_and_no_flags() {
     assert_eq!(
         cfg.providers,
         Provider::DEFAULT_ORDER.to_vec(),
-        "all four sources, best-looking first"
+        "DankMaterialShell's six, in DankMaterialShell's order"
     );
 }
 
@@ -84,9 +81,7 @@ fn file_overrides_every_default() {
     assert!(!cfg.overlapping_voices);
     assert_eq!(cfg.tick_ms, 77);
     assert_eq!(cfg.resync_threshold_ms, 333);
-    assert_eq!(cfg.providers, vec![Provider::LrcMux, Provider::LrcLib]);
-    assert_eq!(cfg.lyricsplus_url, "https://lp.file");
-    assert_eq!(cfg.lrcmux_url, "https://mux.file");
+    assert_eq!(cfg.providers, vec![Provider::KuGou, Provider::LrcLib]);
     // Nothing above silently matched the default and passed by luck.
     assert_ne!(cfg.font, d.font);
     assert_ne!(cfg.tick_ms, d.tick_ms);
@@ -96,77 +91,39 @@ fn file_overrides_every_default() {
     assert_ne!(cfg.overlapping_voices, d.overlapping_voices);
     assert_ne!(cfg.network, d.network);
     assert_ne!(cfg.providers, d.providers);
-    assert_ne!(cfg.lyricsplus_url, d.lyricsplus_url);
-    assert_ne!(cfg.lrcmux_url, d.lrcmux_url);
 }
 
 #[test]
 fn flag_beats_file_for_the_provider_list() {
-    let cfg = resolve(FULL_FILE, &["--providers", "lrclib,amll"]);
-    assert_eq!(cfg.providers, vec![Provider::LrcLib, Provider::Amll]);
+    let cfg = resolve(FULL_FILE, &["--providers", "lrclib,betterlyrics"]);
+    assert_eq!(
+        cfg.providers,
+        vec![Provider::LrcLib, Provider::BetterLyrics]
+    );
     // The list is an order, not a set: the flag's order is the one used.
-    assert_ne!(cfg.providers, vec![Provider::Amll, Provider::LrcLib]);
-}
-
-#[test]
-fn the_default_lrcmux_filter_excludes_kugou() {
-    // The one upstream measured returning confidently-timed wrong words. If
-    // this ever becomes an allow-list by accident, every other upstream is
-    // silently switched off with it.
-    let cfg = resolve("", &[]);
-    assert_eq!(
-        cfg.lrcmux_sources.names(),
-        ["!kugou"],
-        "the default is a deny-list of one, not an allow-list"
-    );
-    assert_eq!(cfg.lrcmux_sources.param().as_deref(), Some("!kugou"));
-}
-
-#[test]
-fn file_then_flag_win_for_the_lrcmux_filter() {
-    let cfg = resolve(FULL_FILE, &[]);
-    assert_eq!(cfg.lrcmux_sources.names(), ["musixmatch", "ytmusic"]);
-
-    let cfg = resolve(FULL_FILE, &["--lrcmux-sources", "!kugou,!genius"]);
-    assert_eq!(cfg.lrcmux_sources.names(), ["!kugou", "!genius"]);
-
-    // `all` is the way to spell "no filter": an empty string is eaten by the
-    // shell and would be rejected as a missing value.
-    let cfg = resolve(FULL_FILE, &["--lrcmux-sources", "all"]);
-    assert!(cfg.lrcmux_sources.names().is_empty());
-    assert_eq!(
-        cfg.lrcmux_sources.param(),
-        None,
-        "an empty filter sends no parameter at all"
+    assert_ne!(
+        cfg.providers,
+        vec![Provider::BetterLyrics, Provider::LrcLib]
     );
 }
 
 #[test]
-fn a_contradictory_lrcmux_filter_is_rejected() {
-    // Allowing `musixmatch` already excludes kugou; asking for both forms at
-    // once means the user thinks one of them does something it does not.
-    let err = ConfigFile::parse(r#"lrcmux_sources = ["musixmatch", "!kugou"]"#)
-        .expect_err("a mixed allow/deny list must not load");
+fn settings_for_removed_providers_still_load() {
+    // A config written for the lrcmux era must not stop the program starting.
+    let file = r#"
+lyricsplus_url = "https://lp.file"
+lrcmux_url = "https://mux.file"
+lrcmux_sources = ["musixmatch", "ytmusic"]
+"#;
+    assert_eq!(resolve(file, &[]), Config::default());
+}
+
+#[test]
+fn a_removed_provider_name_says_it_was_removed() {
+    let err = ConfigFile::parse(r#"providers = ["amll", "lrclib"]"#)
+        .expect_err("a removed provider must not load silently");
     let full = format!("{err:#}");
-    assert!(full.contains("mix"), "the message explains why: {full}");
-
-    assert!(Cli::try_parse_from(["lyrics", "--lrcmux-sources", "musixmatch,!kugou"]).is_err());
-    assert!(Cli::try_parse_from(["lyrics", "--lrcmux-sources", "!"]).is_err());
-}
-
-#[test]
-fn flag_beats_file_for_both_provider_urls() {
-    let cfg = resolve(
-        FULL_FILE,
-        &[
-            "--lyricsplus-url",
-            "http://lp.flag",
-            "--lrcmux-url",
-            "http://mux.flag",
-        ],
-    );
-    assert_eq!(cfg.lyricsplus_url, "http://lp.flag");
-    assert_eq!(cfg.lrcmux_url, "http://mux.flag");
+    assert!(full.contains("removed"), "the message says why: {full}");
 }
 
 #[test]
@@ -182,7 +139,14 @@ fn an_unknown_provider_name_is_rejected_and_the_valid_ones_are_named() {
         full.contains("lrclub"),
         "the message names the typo: {full}"
     );
-    for valid in ["amll", "lyricsplus", "lrcmux", "lrclib"] {
+    for valid in [
+        "betterlyrics",
+        "unison",
+        "lyricsplus",
+        "kugou",
+        "lrclib",
+        "youtubemusic",
+    ] {
         assert!(full.contains(valid), "the message names {valid}: {full}");
     }
 

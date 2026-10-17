@@ -12,8 +12,7 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 
 use crate::cli::Cli;
-use crate::lyrics::lrcmux;
-use crate::lyrics::{LRCMUX_URL, LYRICSPLUS_URL, Provider};
+use crate::lyrics::Provider;
 
 /// Where the accent colour comes from.
 ///
@@ -201,17 +200,9 @@ pub struct Config {
     /// How far the predicted position may drift from the player's own
     /// `Position` before we re-anchor the clock.
     pub resync_threshold_ms: u64,
-    /// Which network sources to consult, in the order they are consulted.
-    /// Dropping a name is how a provider is turned off.
+    /// Which network sources to consult, in priority order. Dropping a name
+    /// is how a provider is turned off. The default is DankMaterialShell's.
     pub providers: Vec<Provider>,
-    /// Base URL of the LyricsPlus instance. Overridable because the default is
-    /// one person's server and the project documents self-hosting.
-    pub lyricsplus_url: String,
-    /// Base URL of the lrcmux instance, overridable for the same reason.
-    pub lrcmux_url: String,
-    /// Which of lrcmux's own upstreams it may answer from. lrcmux ranks them
-    /// itself and cannot be told to prefer one, so this is a filter.
-    pub lrcmux_sources: lrcmux::Sources,
 }
 
 impl Default for Config {
@@ -229,11 +220,6 @@ impl Default for Config {
             tick_ms: 30,
             resync_threshold_ms: 250,
             providers: Provider::DEFAULT_ORDER.to_vec(),
-            lyricsplus_url: LYRICSPLUS_URL.to_string(),
-            lrcmux_url: LRCMUX_URL.to_string(),
-            lrcmux_sources: lrcmux::Sources::DEFAULT
-                .parse()
-                .expect("the built-in default parses"),
         }
     }
 }
@@ -256,12 +242,11 @@ pub struct ConfigFile {
     /// An unknown name here is an error, not a silent skip: it would otherwise
     /// look exactly like the provider being unreachable.
     pub providers: Option<Vec<Provider>>,
-    pub lyricsplus_url: Option<String>,
-    pub lrcmux_url: Option<String>,
-    /// A contradictory list here is an error for the same reason an unknown
-    /// provider name is: silently ignored, it would look like the filter simply
-    /// not working.
-    pub lrcmux_sources: Option<lrcmux::Sources>,
+    /// Settings for providers that are gone. Accepted and ignored, so a config
+    /// written for an older version still loads.
+    pub lyricsplus_url: Option<toml::Value>,
+    pub lrcmux_url: Option<toml::Value>,
+    pub lrcmux_sources: Option<toml::Value>,
 }
 
 impl ConfigFile {
@@ -319,21 +304,6 @@ impl Config {
                 .clone()
                 .or(file.providers)
                 .unwrap_or(d.providers),
-            lyricsplus_url: cli
-                .lyricsplus_url
-                .clone()
-                .or(file.lyricsplus_url)
-                .unwrap_or(d.lyricsplus_url),
-            lrcmux_url: cli
-                .lrcmux_url
-                .clone()
-                .or(file.lrcmux_url)
-                .unwrap_or(d.lrcmux_url),
-            lrcmux_sources: cli
-                .lrcmux_sources
-                .clone()
-                .or(file.lrcmux_sources)
-                .unwrap_or(d.lrcmux_sources),
         }
     }
 }
@@ -344,9 +314,11 @@ pub fn default_config_path() -> Option<PathBuf> {
         .map(|d| d.config_dir().join("config.toml"))
 }
 
-/// `$XDG_CACHE_HOME/terminal-lyrics/`.
+/// Where lyrics are cached: DankMaterialShell's cache when DMS is installed,
+/// so the two share answers, and `$XDG_CACHE_HOME/terminal-lyrics/lyrics/`
+/// otherwise.
 pub fn cache_dir() -> Option<PathBuf> {
-    directories::ProjectDirs::from("", "", "terminal-lyrics").map(|d| d.cache_dir().to_path_buf())
+    crate::lyrics::cache::default_dir()
 }
 
 /// `$XDG_DATA_HOME/terminal-lyrics/offsets.json`, where the per-track sync

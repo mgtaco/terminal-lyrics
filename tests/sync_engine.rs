@@ -13,6 +13,7 @@ fn track(id: &str) -> Box<Track> {
         artist: "Artist".into(),
         album: None,
         length: Some(200.0),
+        url: None,
     })
 }
 

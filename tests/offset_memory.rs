@@ -31,6 +31,7 @@ fn track(id: &str) -> Track {
         artist: "Some Artist".to_string(),
         album: None,
         length: Some(200.0),
+        url: None,
     }
 }
 

@@ -1,13 +1,14 @@
 //! Diagnostic: convert a TTML file to enhanced LRC and show what was parsed.
 use terminal_lyrics::lrc;
-use terminal_lyrics::lyrics::ttml;
+use terminal_lyrics::lyrics::display;
+use terminal_lyrics::lyrics::format::ttml;
 
 fn main() -> anyhow::Result<()> {
     let path = std::env::args()
         .nth(1)
         .expect("usage: ttml_probe <file.ttml>");
-    let xml = std::fs::read_to_string(path)?;
-    let a2 = ttml::to_enhanced_lrc(&xml)?;
+    let xml = std::fs::read(path)?;
+    let a2 = display::to_lrc(&ttml::parse(&xml)?);
     for line in a2.lines().take(4) {
         println!("{line}");
     }

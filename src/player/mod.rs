@@ -50,15 +50,18 @@ use tokio::sync::mpsc;
 /// The currently loaded track, normalised out of whatever the platform reports.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Track {
-    /// Stable identity for cache keys. Spotify gives a permalink or a
-    /// `spotify:track:` URI either way, which is also the AMLL lookup key;
-    /// other players fall back to their own id, then to artist+title.
+    /// Stable identity for the saved sync nudges. Spotify gives a permalink
+    /// or a `spotify:track:` URI either way; other players fall back to their
+    /// own id, then to artist+title.
     pub id: String,
     pub title: String,
     pub artist: String,
     pub album: Option<String>,
     /// Track length in seconds, when the player reports it.
     pub length: Option<f64>,
+    /// Where the player is reading it from (`xesam:url`). A `file://` one is
+    /// where lyrics files next to the track are looked for.
+    pub url: Option<String>,
 }
 
 impl Track {

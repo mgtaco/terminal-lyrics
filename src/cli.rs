@@ -10,7 +10,6 @@ use clap::{Parser, Subcommand};
 
 use crate::config::{ColorSource, Sweep};
 use crate::lyrics::Provider;
-use crate::lyrics::lrcmux;
 
 #[derive(Parser, Debug, Default)]
 #[command(
@@ -43,24 +42,11 @@ pub struct Cli {
     #[arg(long)]
     pub no_network: bool,
 
-    /// Lyrics providers to consult, in order, comma-separated.
-    /// Valid names: amll, lyricsplus, lrcmux, lrclib.
+    /// Lyrics providers to consult, in priority order, comma-separated.
+    /// Valid names: betterlyrics, unison, lyricsplus, kugou, lrclib,
+    /// youtubemusic.
     #[arg(long, value_name = "LIST", value_delimiter = ',', value_parser = parse_provider)]
     pub providers: Option<Vec<Provider>>,
-
-    /// Base URL of the LyricsPlus instance to query.
-    #[arg(long, value_name = "URL")]
-    pub lyricsplus_url: Option<String>,
-
-    /// Base URL of the lrcmux instance to query.
-    #[arg(long, value_name = "URL")]
-    pub lrcmux_url: Option<String>,
-
-    /// Which of lrcmux's upstreams may answer, comma-separated: either a list
-    /// to allow (`musixmatch,ytmusic`) or a list to exclude, each name
-    /// `!`-prefixed (`!kugou`). Pass `all` to let lrcmux choose freely.
-    #[arg(long, value_name = "LIST", value_parser = parse_lrcmux_sources)]
-    pub lrcmux_sources: Option<lrcmux::Sources>,
 
     /// Where the accent colour comes from: `terminal` (the default, which
     /// follows your terminal's own scheme), `pywal`, `fixed:#rrggbb`, or
@@ -117,10 +103,10 @@ pub enum Command {
         /// Track length in seconds; greatly improves match accuracy.
         #[arg(long)]
         duration: Option<f64>,
-        /// Spotify track ID or URL. When given, the word-timed AMLL database
-        /// is tried first, exactly as it is for a live track.
-        #[arg(long, value_name = "ID_OR_URL")]
-        spotify_id: Option<String>,
+        /// Print the provider's answer as JSON, in the shape DankMaterialShell
+        /// caches it, instead of LRC.
+        #[arg(long)]
+        json: bool,
     },
     /// Print the paths this build reads and writes.
     Paths,
@@ -135,16 +121,6 @@ fn parse_provider(raw: &str) -> Result<Provider, String> {
 /// Same idea for the colour source: one parser, so `--color-source` and the
 /// config key reject the same things with the same message.
 fn parse_color_source(raw: &str) -> Result<ColorSource, String> {
-    raw.parse()
-}
-
-/// The lrcmux upstream filter. `all` is spelled out rather than left as the
-/// empty string, which a shell eats and `--lrcmux-sources` would then reject as
-/// a missing value.
-fn parse_lrcmux_sources(raw: &str) -> Result<lrcmux::Sources, String> {
-    if raw.trim().eq_ignore_ascii_case("all") {
-        return Ok(lrcmux::Sources::any());
-    }
     raw.parse()
 }
 

@@ -5,6 +5,7 @@
 //! does is advance the sweep — ratatui diffs the buffer, so an unchanged screen
 //! costs no output at all, rather than reprinting everything on a timer.
 
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
@@ -17,9 +18,7 @@ use ratatui::widgets::Paragraph;
 use tokio::sync::mpsc;
 
 use crate::config::Config;
-use crate::lyrics::Net;
-use crate::lyrics::cache::Cache;
-use crate::lyrics::{Outcome, Source};
+use crate::lyrics::{Engine, Outcome, Source};
 use crate::offsets::Offsets;
 use crate::player::{EventRx, PlayerEvent, PlayerHandle, Track};
 use crate::render::font::{self, Font};
@@ -40,6 +39,9 @@ enum LyricState {
         /// Whether the source carries real per-word timestamps. Decided once,
         /// when the lyrics load, rather than per frame.
         word_timed: bool,
+        /// What the timeline was built from, so an answer that changes
+        /// nothing does not rebuild it.
+        raw: String,
     },
     /// Looked up, nothing usable found.
     Missing,
@@ -52,6 +54,7 @@ fn ready_from(found: crate::lyrics::Found) -> LyricState {
         timeline: Box::new(Timeline::new(found.lyrics)),
         source: found.source,
         word_timed,
+        raw: found.raw,
     }
 }
 
@@ -179,12 +182,11 @@ pub async fn run(
     cfg: Config,
     player: PlayerHandle,
     events: EventRx,
-    cache: Cache,
-    client: Option<Net>,
+    lookup: Arc<Engine>,
     offsets: Offsets,
 ) -> Result<()> {
     let terminal = ratatui::try_init().context("failed to take over the terminal")?;
-    let result = run_inner(cfg, player, events, cache, client, offsets, terminal).await;
+    let result = run_inner(cfg, player, events, lookup, offsets, terminal).await;
     ratatui::restore();
     result
 }
@@ -193,8 +195,7 @@ async fn run_inner(
     cfg: Config,
     player: PlayerHandle,
     mut events: EventRx,
-    cache: Cache,
-    client: Option<Net>,
+    lookup: Arc<Engine>,
     offsets: Offsets,
     mut terminal: DefaultTerminal,
 ) -> Result<()> {
@@ -205,8 +206,6 @@ async fn run_inner(
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
     let (fetch_tx, mut fetch_rx) = mpsc::unbounded_channel::<FetchResult>();
-    let client = client.map(std::sync::Arc::new);
-    let cache = std::sync::Arc::new(cache);
 
     let mut sigterm = signal_stream();
 
@@ -223,7 +222,7 @@ async fn run_inner(
                 let gone = matches!(event, PlayerEvent::Gone);
                 match app.apply_player_event(event, now) {
                     Change::Track(track) => {
-                        start_lookup(&mut app, track.map(|b| *b), &cache, &client, &fetch_tx);
+                        start_lookup(&mut app, track.map(|b| *b), &lookup, &fetch_tx);
                     }
                     Change::Gone => {
                         app.state = LyricState::Idle;
@@ -244,7 +243,7 @@ async fn run_inner(
             // Keyboard.
             Some(Ok(event)) = keys.next() => {
                 if let Event::Key(key) = event {
-                    handle_key(&mut app, key, &player, &cache, &client, &fetch_tx).await;
+                    handle_key(&mut app, key, &player, &lookup, &fetch_tx).await;
                 }
             }
 
@@ -407,8 +406,8 @@ fn draw(terminal: &mut DefaultTerminal, app: &App) -> Result<()> {
 
 /// The one-line strip along the bottom.
 ///
-/// Just where the lyrics came from — `amll`, `lyricsplus`, `lrcmux/musixmatch`,
-/// `lrclib`, `cache`, or a filename.
+/// Just where the lyrics came from — `betterlyrics`, `lrclib`, … — or a
+/// filename.
 /// Everything else that could go here (sync mode, offset, paused) is either
 /// visible on screen already or available from `lyrics status`; on the strip it
 /// was noise sitting under the lyrics.
@@ -426,11 +425,15 @@ fn status_line(app: &App) -> Option<String> {
 }
 
 /// Kick off a lookup for a newly loaded track.
+///
+/// Whatever is already known — a file next to the track, a cached answer — is
+/// shown at once, and the full lookup still runs behind it, the way DMS does
+/// it: a provider ahead of the cached one may have an answer by now, and the
+/// race is what decides.
 fn start_lookup(
     app: &mut App,
     track: Option<Track>,
-    cache: &std::sync::Arc<Cache>,
-    client: &Option<std::sync::Arc<Net>>,
+    lookup: &Arc<Engine>,
     tx: &mpsc::UnboundedSender<FetchResult>,
 ) {
     let Some(track) = track.filter(Track::is_usable) else {
@@ -446,30 +449,19 @@ fn start_lookup(
         return;
     }
 
-    app.state = LyricState::Searching;
-
-    // Cached answers are cheap; take them on this task so the UI never shows a
-    // pointless "searching" flash for a song we already know about.
-    if let Some(cached) = cache.get(&track.id) {
-        match cached {
-            Some(found) => {
-                app.state = ready_from(found);
-            }
-            None => app.state = LyricState::Missing,
-        }
-        return;
-    }
-
-    let Some(client) = client.clone() else {
-        app.state = LyricState::Missing;
-        return;
+    app.state = match crate::lyrics::cached(lookup, &app.cfg.providers, &track) {
+        Some(Outcome::Found(found)) => ready_from(*found),
+        _ => LyricState::Searching,
     };
 
-    let cache = cache.clone();
+    let lookup = lookup.clone();
     let tx = tx.clone();
     let order = app.cfg.providers.clone();
+    let network = app.cfg.network;
     tokio::spawn(async move {
-        let outcome = crate::lyrics::lookup(client.as_ref(), &order, &cache, &track).await;
+        let outcome = crate::lyrics::lookup(&lookup, &order, &track, network)
+            .await
+            .map_err(anyhow::Error::from);
         let _ = tx.send(FetchResult {
             track_id: track.id.clone(),
             outcome,
@@ -483,11 +475,18 @@ fn apply_fetch(app: &mut App, result: FetchResult) {
     if current.as_deref() != Some(result.track_id.as_str()) {
         return;
     }
+    let showing = matches!(app.state, LyricState::Ready { .. });
     match result.outcome {
         Ok(Outcome::Found(found)) => {
-            app.state = ready_from(*found);
+            if !matches!(&app.state, LyricState::Ready { raw, .. } if *raw == found.raw) {
+                app.state = ready_from(*found);
+            }
         }
+        // Lyrics already on screen came from the cache; nothing better turned
+        // up, and a failure to ask again is no reason to take them away.
+        Ok(Outcome::Missing) if showing => {}
         Ok(Outcome::Missing) => app.state = LyricState::Missing,
+        Err(_) if showing => {}
         Err(e) => {
             app.state = LyricState::Missing;
             app.note(format!("lookup failed: {e}"));
@@ -501,9 +500,8 @@ const FINE_NUDGE_MS: i64 = 100;
 /// What `<` and `>` move it by.
 ///
 /// A hundred milliseconds is the right step for the last of a correction and
-/// the wrong one for the start of it: lrcmux's Musixmatch answers are timed
-/// against a different master often enough, and are out by two or three whole
-/// seconds when they are, which is thirty presses of `.` at the fine step. The
+/// the wrong one for the start of it: an answer timed against a different
+/// master is out by two or three whole seconds, which is thirty presses of `.` at the fine step. The
 /// coarse key is the same correction in three, and lands close enough that the
 /// fine one has something to finish.
 const COARSE_NUDGE_MS: i64 = 1000;
@@ -520,8 +518,7 @@ async fn handle_key(
     app: &mut App,
     key: KeyEvent,
     player: &PlayerHandle,
-    cache: &std::sync::Arc<Cache>,
-    client: &Option<std::sync::Arc<Net>>,
+    lookup: &Arc<Engine>,
     tx: &mpsc::UnboundedSender<FetchResult>,
 ) {
     if key.kind != KeyEventKind::Press {
@@ -578,9 +575,15 @@ async fn handle_key(
         }
         KeyCode::Char('r') => {
             if let Some(track) = app.engine.track().cloned() {
-                cache.forget(&track.id);
+                if !app.cfg.network {
+                    app.note("network disabled; nothing to refetch from");
+                    return;
+                }
+                let req = crate::lyrics::request_for(&track, true);
+                lookup.forget(&req, &app.cfg.providers);
                 app.note("refetching");
-                start_lookup(app, Some(track), cache, client, tx);
+                app.state = LyricState::Searching;
+                start_lookup(app, Some(track), lookup, tx);
             }
         }
         KeyCode::Char(' ') => {

@@ -7,10 +7,9 @@
 //! scripting dictionary, which is why this backend knows the apps by name rather
 //! than discovering them.
 //!
-//! That trade is not all loss. Spotify's dictionary hands back
-//! `spotify:track:<id>`, which is exactly the AMLL lookup key, so the
-//! word-by-word path — the whole point of the program — works here as well as it
-//! does on Linux.
+//! That trade costs the lyrics nothing: every provider matches on artist and
+//! title, so the word-by-word path works here as well as it does on Linux.
+//! Spotify's `spotify:track:<id>` is still kept, as the key for saved nudges.
 //!
 //! Two decisions in the script below are load-bearing:
 //!
@@ -212,6 +211,7 @@ pub fn parse_probe(stdout: &str) -> Vec<Probe> {
                 artist: artist.clone(),
                 album: Some(f[7].trim().to_string()).filter(|s| !s.is_empty()),
                 length: parse_ms(f[3]).filter(|&d| d > 0.0),
+                url: None,
             }
         });
 
