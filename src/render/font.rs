@@ -273,7 +273,8 @@ impl Face {
         // A dot and an accent do not stack: í is a dotless i with an acute.
         if marks.iter().any(|m| placement(*m) == Some(Place::Above)) {
             let dotless = match base {
-                'i' => Some('ı'),
+                // Cyrillic `і` (U+0456) is dotted too: ї is `і` plus a diaeresis.
+                'i' | '\u{456}' => Some('ı'),
                 'j' => Some('ȷ'),
                 _ => None,
             };
@@ -532,6 +533,42 @@ tracking 1
         b.stamp(&wide, -1, -2);
         assert_eq!(b.width, 4);
         assert_eq!(b.top, -2);
+    }
+
+    const CYRILLIC: &str = "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя\
+                            ІЇЄҐіїєґЎў";
+
+    #[test]
+    fn every_russian_letter_is_drawn_as_art_in_both_fonts() {
+        for font in [block(), compact()] {
+            for c in CYRILLIC.chars() {
+                assert!(font.can_draw(c), "{}: no art for {c}", font.name);
+                assert!(
+                    matches!(font.draw(c, &[]), Glyph::Art(_)),
+                    "{}: {c} fell back to plain text",
+                    font.name
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_decomposed_yo_draws_like_the_precomposed_one() {
+        let font = block();
+        assert_eq!(font.draw('ё', &[]), font.draw('е', &['\u{308}']));
+        assert_eq!(font.draw('Й', &[]), font.draw('И', &['\u{306}']));
+    }
+
+    #[test]
+    fn a_cyrillic_i_loses_its_dot_under_a_diaeresis() {
+        let font = block();
+        let (Glyph::Art(yi), Glyph::Art(i)) = (font.draw('ї', &[]), font.draw('і', &[])) else {
+            panic!("expected art");
+        };
+        // A dotted `і` with a diaeresis on top would collide; the dotless stem
+        // under two dots is wider than the plain `і`.
+        assert!(yi.width > i.width);
+        assert_ne!(yi, i);
     }
 
     #[test]
