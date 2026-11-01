@@ -168,10 +168,34 @@ fn decomposed_text_draws_the_same_as_precomposed() {
 
 #[test]
 fn a_line_in_another_script_falls_back_to_plain_text() {
-    let l = layout("君の名は", &font::block(), 200);
+    let l = layout("سلام", &font::block(), 200);
     assert_eq!(l.lines[0].height, 1);
     let text: String = l.lines[0].cells.iter().map(|c| c.rows[0].clone()).collect();
-    assert_eq!(text, "君の名は");
+    assert_eq!(text, "سلام");
+}
+
+#[test]
+fn chinese_japanese_and_korean_are_drawn_as_art() {
+    for f in fonts() {
+        for c in "君の名はカタカナ中文漢字한국어、。「」！ｶ".chars() {
+            assert!(
+                matches!(f.draw(c, &[]), Glyph::Art(b) if !b.is_blank()),
+                "{}: {c} is not art",
+                f.name
+            );
+        }
+    }
+    // Exactly the capitals' height, so a line of it stands where Latin would.
+    let l = layout("君の名は", &font::block(), 200);
+    assert_eq!(l.lines[0].height, 5);
+}
+
+#[test]
+fn decomposed_kana_keeps_its_dakuten() {
+    for f in fonts() {
+        assert_eq!(f.draw('が', &[]), f.draw('か', &['\u{3099}']), "{}", f.name);
+        assert_ne!(f.draw('が', &[]), f.draw('か', &[]), "{}", f.name);
+    }
 }
 
 #[test]

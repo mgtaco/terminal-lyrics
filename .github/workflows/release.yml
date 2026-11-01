@@ -70,7 +70,7 @@ jobs:
 
           mkdir -p "dist/${name}"
           cp "target/${{ matrix.target }}/release/${bin}" "dist/${name}/"
-          cp README.md LICENSE config.example.toml "dist/${name}/"
+          cp -R README.md LICENSE licenses config.example.toml "dist/${name}/"
           tar -czf "dist/${name}.tar.gz" -C dist "${name}"
 
       - uses: actions/upload-artifact@v4

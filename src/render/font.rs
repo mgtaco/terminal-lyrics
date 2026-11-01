@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
-use unicode_normalization::char::{decompose_canonical, is_combining_mark};
+use unicode_normalization::char::{compose, decompose_canonical, is_combining_mark};
 use unicode_width::UnicodeWidthStr;
 
 /// `top` is the first row's y in pixels down from the cap line; negative is a
@@ -268,6 +268,11 @@ impl Face {
         if c.is_whitespace() {
             return Some(Bitmap::blank(self.space, 0, self.cap));
         }
+        // Kana is never pulled apart: there is no art for a dakuten on its own.
+        let composed = extra.iter().try_fold(c, |c, m| compose(c, *m));
+        if let Some(wide) = composed.and_then(|c| wide(c, self.cap)) {
+            return Some(wide);
+        }
         let (mut base, mut marks) = self.split(c)?;
         marks.extend_from_slice(extra);
         // A dot and an accent do not stack: í is a dotless i with an acute.
@@ -376,6 +381,40 @@ fn mark_name(mark: char) -> &'static str {
     }
 }
 
+/// Han, kana and hangul come from a pixel font: far too many to draw by hand.
+/// Built by `examples/cjk_font.rs`, which describes the format.
+static WIDE: &[u8] = include_bytes!("fonts/cjk.bin");
+const WIDE_RECORD: usize = 24;
+const WIDE_CELL: usize = 10;
+
+fn wide_record(c: char) -> Option<&'static [u8; WIDE_RECORD]> {
+    let (records, _) = WIDE.as_chunks::<WIDE_RECORD>();
+    let i = records
+        .binary_search_by_key(&(c as u32), |r| u32::from_le_bytes([r[0], r[1], r[2], 0]))
+        .ok()?;
+    Some(&records[i])
+}
+
+/// Centred on the capitals, which in `block` it fills exactly.
+fn wide(c: char, cap: usize) -> Option<Bitmap> {
+    let record = wide_record(c)?;
+    let width = record[3] as usize;
+    let rows = record[4..]
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|b| {
+            let bits = u16::from_le_bytes(*b);
+            (0..width).map(|x| bits & (0x8000 >> x) != 0).collect()
+        })
+        .collect();
+    Some(Bitmap {
+        width,
+        top: (cap as i32 - WIDE_CELL as i32) / 2,
+        rows,
+    })
+}
+
 /// Whether `c` combines onto the character before it rather than standing on
 /// its own.
 pub fn is_mark(c: char) -> bool {
@@ -415,7 +454,7 @@ impl Font {
     pub fn can_draw(&self, c: char) -> bool {
         match self.face {
             None => true,
-            Some(face) => c.is_whitespace() || face.split(c).is_some(),
+            Some(face) => c.is_whitespace() || wide_record(c).is_some() || face.split(c).is_some(),
         }
     }
 

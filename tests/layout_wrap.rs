@@ -567,3 +567,35 @@ fn the_capitals_stay_put_when_a_word_brings_an_accent_or_a_descender() {
     assert_eq!(cap_row("Hey"), plain, "a descender moved the capitals");
     assert_eq!(cap_row("HÉY"), plain, "an accent moved the capitals");
 }
+
+fn line_texts(l: &Layout) -> Vec<String> {
+    l.lines
+        .iter()
+        .map(|line| line.cells.iter().map(|c| c.rows[0].clone()).collect())
+        .collect()
+}
+
+#[test]
+fn text_without_spaces_wraps_between_characters() {
+    let text = "夢を見ていたんだ";
+    let l = layout(text, &font::mini(), 10);
+    assert_eq!(line_texts(&l), ["夢を見てい", "たんだ"]);
+    let l = layout(text, &font::block(), 25);
+    assert!(l.lines.len() > 1);
+    assert!(l.lines.iter().all(|line| line.width <= 25));
+    assert_no_loss(text, &l);
+}
+
+#[test]
+fn a_small_kana_never_starts_a_line_and_a_bracket_never_ends_one() {
+    let l = layout("あいうえおっか", &font::mini(), 10);
+    assert_eq!(line_texts(&l), ["あいうえ", "おっか"]);
+    let l = layout("あいうえ「お」", &font::mini(), 10);
+    assert_eq!(line_texts(&l), ["あいうえ", "「お」"]);
+}
+
+#[test]
+fn korean_wraps_at_its_spaces() {
+    let l = layout("사랑해 너를", &font::mini(), 10);
+    assert_eq!(line_texts(&l), ["사랑해", "너를"]);
+}

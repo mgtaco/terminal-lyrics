@@ -8,7 +8,7 @@ pkgrel=1
 pkgdesc="Giant block lyrics in your terminal, synced to whatever is playing (git)"
 arch=('x86_64' 'aarch64')
 url="https://github.com/mgtaco/terminal-lyrics"
-license=('MIT')
+license=('MIT' 'OFL-1.1')
 depends=('gcc-libs')
 # Run alongside, not linked: without it the bars are simply not drawn.
 optdepends=('cava: spectrum bars under the lyrics')
@@ -50,6 +50,7 @@ package() {
     cd "${pkgname}"
     install -Dm755 target/release/lyrics "${pkgdir}/usr/bin/lyrics"
     install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+    cp -R licenses/. "${pkgdir}/usr/share/licenses/${pkgname}/"
     install -Dm644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md"
     install -Dm644 config.example.toml \
         "${pkgdir}/usr/share/doc/${pkgname}/config.example.toml"

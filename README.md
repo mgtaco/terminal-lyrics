@@ -396,12 +396,16 @@ Letters are pixel art drawn with half blocks (`▀ ▄ █`), so one pixel is a 
 wide and half a row tall, which is square on most terminals. Capitals,
 lowercase, digits and punctuation are drawn by hand; an accented letter is its
 base letter with the mark stamped on, which covers every Latin-script language,
-Vietnamese's stacked accents included. A line takes the capitals' five rows,
+Vietnamese's stacked accents included, and Russian, Ukrainian and Belarusian
+Cyrillic. Chinese, Japanese and Korean are far too many characters to draw by
+hand, so they come from a 10-pixel CJK font, exactly the capitals' height; a
+line without spaces wraps between any two characters, though never so as to
+start a line on a small kana. A line takes the capitals' five rows,
 plus a row or two only when something in it needs them (an accent on a capital,
 a descender), and the capitals stay where they were, so a word with a `g` in it
-does not bob. A line mostly in another script (Japanese, Cyrillic) is shown as
-plain text, and a stray symbol the font has no art for is shown as itself rather
-than dropped.
+does not bob. A line mostly in a script with no art (Greek, Arabic, Thai) is
+shown as plain text, and a stray symbol the font has no art for is shown as
+itself rather than dropped.
 
 ratatui diffs the screen buffer, so a frame that has not changed emits no bytes
 at all. Lines wrap at word boundaries and the font steps down a size before
@@ -442,6 +446,11 @@ BetterLyrics and Unison,
 [LyricsPlus](https://github.com/ibratabian17/lyricsplus), KuGou,
 [LRCLIB](https://lrclib.net) and YouTube Music. None of them is affiliated with
 this project. Third-party licences are in [licenses/](licenses/).
+
+The Chinese, Japanese and Korean characters are from
+[Fusion Pixel Font](https://github.com/TakWolf/fusion-pixel-font) by TakWolf
+(SIL Open Font License 1.1), converted to the program's own format. The
+Cyrillic letters were drawn by [deepsytxt](https://github.com/deepsytxt).
 
 The platform marks in `docs/icons/` are based on
 [Simple Icons](https://simpleicons.org) (CC0).

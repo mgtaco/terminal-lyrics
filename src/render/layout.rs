@@ -1,6 +1,8 @@
 //! Lines wrap at word boundaries and the font steps down before anything is
 //! cut; nothing is ever truncated.
 
+use unicode_script::{Script, UnicodeScript};
+
 use super::font::{Font, Glyph};
 
 /// One rendered character: rows of art plus where it came from in the source
@@ -53,6 +55,8 @@ struct Piece {
     src: usize,
     /// Whitespace in the source, where a line may break.
     space: bool,
+    /// Whether a line may break just before this, though no space comes first.
+    breaks: bool,
 }
 
 impl Piece {
@@ -73,14 +77,33 @@ fn pieces(text: &str, font: &Font) -> Vec<Piece> {
             _ => clusters.push((i, c, Vec::new())),
         }
     }
+    let mut prev = ' ';
     clusters
         .into_iter()
-        .map(|(src, c, marks)| Piece {
-            glyph: font.draw(c, &marks),
-            src,
-            space: c.is_whitespace(),
+        .map(|(src, c, marks)| {
+            let breaks = breaks_between(prev, c);
+            prev = c;
+            Piece {
+                glyph: font.draw(c, &marks),
+                src,
+                space: c.is_whitespace(),
+                breaks,
+            }
         })
         .collect()
+}
+
+/// Chinese and Japanese are written without spaces, so a line may break
+/// between any two Han or kana characters, though not so as to start a line
+/// with a small kana or a length mark, or end one on an opening bracket.
+fn breaks_between(prev: char, c: char) -> bool {
+    const OPENING: &str = "「『（【〈《〔〖［｛";
+    let starts = OPENING.contains(c)
+        || matches!(
+            c.script(),
+            Script::Han | Script::Hiragana | Script::Katakana
+        ) && !"ぁぃぅぇぉっゃゅょゎゕゖァィゥェォッャュョヮヵヶーｰ々ゝゞヽヾ".contains(c);
+    starts && !OPENING.contains(prev)
 }
 
 /// A word wider than the terminal breaks mid-word rather than being clipped. A
@@ -162,6 +185,15 @@ pub fn layout(text: &str, font: &Font, max_width: usize) -> Layout {
                 }
             }
             continue;
+        }
+        if piece.breaks {
+            flush_word(
+                &mut current,
+                &mut current_width,
+                &mut lines,
+                &mut word,
+                &mut word_width,
+            );
         }
         word_width += if word.is_empty() {
             piece.width()
