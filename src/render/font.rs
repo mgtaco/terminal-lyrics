@@ -145,7 +145,8 @@ const HEADER: [&str; 5] = ["cap", "descent", "gap", "space", "tracking"];
 
 impl Face {
     /// `key value` headers, then `== X` (or `== mark:name`) per glyph and its
-    /// rows of `#` and `.`: `cap` rows, or `cap + descent`. `;` starts a
+    /// rows of `#` and `.`: `cap` rows, or `cap + descent`. `== X like Y`,
+    /// with no rows, gives `X` the art of a `Y` drawn above it. `;` starts a
     /// comment line.
     fn parse(src: &str) -> Result<Self, String> {
         let mut header: HashMap<&str, usize> = HashMap::new();
@@ -195,6 +196,21 @@ impl Face {
         }
 
         for (name, rows) in entries {
+            if let Some((name, of)) = name.split_once(" like ") {
+                let c = single(name)?;
+                let art = face
+                    .glyphs
+                    .get(&single(of)?)
+                    .filter(|_| rows.is_empty())
+                    .cloned()
+                    .ok_or_else(|| {
+                        format!("`{c}` needs no rows of its own and a `{of}` drawn above it")
+                    })?;
+                if face.glyphs.insert(c, art).is_some() {
+                    return Err(format!("`{c}` is defined twice"));
+                }
+                continue;
+            }
             let width = rows.first().map_or(0, |r| r.len());
             if width == 0 || rows.iter().any(|r| r.len() != width) {
                 return Err(format!(
@@ -215,10 +231,7 @@ impl Face {
                 }
                 continue;
             }
-            let mut chars = name.chars();
-            let (Some(c), None) = (chars.next(), chars.next()) else {
-                return Err(format!("`{name}` is not a single character"));
-            };
+            let c = single(name)?;
             match bitmap.rows.len() {
                 n if n == cap => bitmap.rows.resize(cap + descent, vec![false; width]),
                 n if n == cap + descent => {}
@@ -326,6 +339,14 @@ impl Face {
             Place::Horn => (x1 + 1, top - h + 2),
         };
         bitmap.stamp(art, x, y);
+    }
+}
+
+fn single(name: &str) -> Result<char, String> {
+    let mut chars = name.chars();
+    match (chars.next(), chars.next()) {
+        (Some(c), None) => Ok(c),
+        _ => Err(format!("`{name}` is not a single character")),
     }
 }
 
@@ -574,40 +595,10 @@ tracking 1
         assert_eq!(b.top, -2);
     }
 
-    const CYRILLIC: &str = "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя\
-                            ІЇЄҐіїєґЎў";
-
     #[test]
-    fn every_russian_letter_is_drawn_as_art_in_both_fonts() {
-        for font in [block(), compact()] {
-            for c in CYRILLIC.chars() {
-                assert!(font.can_draw(c), "{}: no art for {c}", font.name);
-                assert!(
-                    matches!(font.draw(c, &[]), Glyph::Art(_)),
-                    "{}: {c} fell back to plain text",
-                    font.name
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn a_decomposed_yo_draws_like_the_precomposed_one() {
-        let font = block();
-        assert_eq!(font.draw('ё', &[]), font.draw('е', &['\u{308}']));
-        assert_eq!(font.draw('Й', &[]), font.draw('И', &['\u{306}']));
-    }
-
-    #[test]
-    fn a_cyrillic_i_loses_its_dot_under_a_diaeresis() {
-        let font = block();
-        let (Glyph::Art(yi), Glyph::Art(i)) = (font.draw('ї', &[]), font.draw('і', &[])) else {
-            panic!("expected art");
-        };
-        // A dotted `і` with a diaeresis on top would collide; the dotless stem
-        // under two dots is wider than the plain `і`.
-        assert!(yi.width > i.width);
-        assert_ne!(yi, i);
+    fn a_letter_like_another_takes_its_art() {
+        let face = Face::parse(&format!("{TINY}\n== 0 like o\n")).unwrap();
+        assert_eq!(face.glyphs[&'0'], face.glyphs[&'o']);
     }
 
     #[test]
@@ -617,5 +608,9 @@ tracking 1
         assert!(Face::parse(&ragged).unwrap_err().contains("width"));
         let short = format!("{TINY}\n== x\n##\n");
         assert!(Face::parse(&short).unwrap_err().contains("rows"));
+        let unknown = format!("{TINY}\n== 0 like q\n");
+        assert!(Face::parse(&unknown).unwrap_err().contains("`q`"));
+        let both = format!("{TINY}\n== 0 like o\n##\n##\n##\n##\n");
+        assert!(Face::parse(&both).unwrap_err().contains("no rows"));
     }
 }

@@ -1,4 +1,4 @@
-//! No Latin letter is drawn blank, accents land where they should, and no two
+//! No Latin or Cyrillic letter is drawn blank, accents land where they should, and no two
 //! characters look the same.
 
 use terminal_lyrics::render::font::{self, Font, Glyph};
@@ -7,7 +7,8 @@ use terminal_lyrics::render::layout::layout;
 /// Everything drawn by hand in `src/render/fonts/`.
 const DRAWN: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789\
     ÆæŒœØøŁłĐđÐðĦħÞþßẞŊŋəıȷĲĳĿŀĸŉªº\
-    '\"‘’“”`,.…!¡?¿-–—_()[]:;/\\&#*+=<>@$%~^«»♪♫";
+    '\"‘’“”`,.…!¡?¿-–—_()[]:;/\\&#*+=<>@$%~^«»♪♫\
+    БГДЖЗИЛПУФЧШЩЦЪЬЫЄЭЮЯҐЉЊЋЂЏбвгджзиклмнптфцчшщъьыєэюяґљњђџ";
 
 /// Pairs that are meant to look alike.
 const TWINS: &[(char, char)] = &[
@@ -19,6 +20,10 @@ const TWINS: &[(char, char)] = &[
     ('’', '‘'),
     ('"', '“'),
     ('”', '“'),
+    ('З', '3'),
+    ('к', 'ĸ'),
+    // In compact a capital is no taller than an ascender.
+    ('Ь', 'b'),
 ];
 
 fn fonts() -> [Font; 2] {
@@ -97,6 +102,19 @@ fn every_european_letter_is_drawn_as_art() {
     }
 }
 
+/// The basic Cyrillic block: Russian, Ukrainian, Belarusian, Bulgarian,
+/// Serbian and Macedonian.
+#[test]
+fn every_cyrillic_letter_is_drawn_as_art() {
+    for f in fonts() {
+        let missing: String = ('\u{400}'..='\u{45F}')
+            .chain("Ґґ".chars())
+            .filter(|c| !matches!(f.draw(*c, &[]), Glyph::Art(b) if !b.is_blank()))
+            .collect();
+        assert!(missing.is_empty(), "{} cannot draw {missing:?}", f.name);
+    }
+}
+
 #[test]
 fn an_accent_changes_the_letter_and_rises_above_a_capital() {
     for f in fonts() {
@@ -118,14 +136,17 @@ fn an_accent_changes_the_letter_and_rises_above_a_capital() {
 
 #[test]
 fn an_accented_i_loses_its_dot() {
-    for f in fonts() {
-        // A dot and an acute do not stack: í is a dotless ı under an acute.
-        let composed = match f.draw('ı', &['\u{301}']) {
-            Glyph::Art(b) => b,
-            Glyph::Plain(_) => unreachable!(),
-        };
-        assert_eq!(art(&f, 'í'), composed, "{}", f.name);
-        assert_ne!(picture(&f, 'í'), picture(&f, 'i'), "{}", f.name);
+    // A dot and an accent do not stack: í is a dotless ı under an acute, and
+    // Ukrainian ї is a dotless ı under a diaeresis.
+    for (i, accented, mark) in [('i', 'í', '\u{301}'), ('і', 'ї', '\u{308}')] {
+        for f in fonts() {
+            let composed = match f.draw('ı', &[mark]) {
+                Glyph::Art(b) => b,
+                Glyph::Plain(_) => unreachable!(),
+            };
+            assert_eq!(art(&f, accented), composed, "{}: {accented}", f.name);
+            assert_ne!(picture(&f, accented), picture(&f, i), "{}", f.name);
+        }
     }
 }
 
@@ -163,6 +184,8 @@ fn decomposed_text_draws_the_same_as_precomposed() {
                 .collect::<Vec<_>>()
         };
         assert_eq!(rows(&nfc), rows(&nfd), "{}", f.name);
+        assert_eq!(f.draw('ё', &[]), f.draw('е', &['\u{308}']), "{}", f.name);
+        assert_eq!(f.draw('Й', &[]), f.draw('И', &['\u{306}']), "{}", f.name);
     }
 }
 

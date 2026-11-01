@@ -396,8 +396,8 @@ Letters are pixel art drawn with half blocks (`▀ ▄ █`), so one pixel is a 
 wide and half a row tall, which is square on most terminals. Capitals,
 lowercase, digits and punctuation are drawn by hand; an accented letter is its
 base letter with the mark stamped on, which covers every Latin-script language,
-Vietnamese's stacked accents included, and Russian, Ukrainian and Belarusian
-Cyrillic. Chinese, Japanese and Korean are far too many characters to draw by
+Vietnamese's stacked accents included, and Cyrillic for Russian, Ukrainian,
+Belarusian, Bulgarian, Serbian and Macedonian. Chinese, Japanese and Korean are far too many characters to draw by
 hand, so they come from a 10-pixel CJK font, exactly the capitals' height; a
 line without spaces wraps between any two characters, though never so as to
 start a line on a small kana. A line takes the capitals' five rows,
