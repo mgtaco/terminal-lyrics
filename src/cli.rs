@@ -100,6 +100,16 @@ pub struct Cli {
     #[arg(long, overrides_with = "visualizer")]
     pub no_visualizer: bool,
 
+    /// Name the lyrics source in the bottom-left corner. This is the
+    /// default; `--hide-source` turns it off.
+    #[arg(long, overrides_with = "hide_source")]
+    pub show_source: bool,
+
+    /// Leave the bottom-left corner empty, except for the brief message after
+    /// a keypress.
+    #[arg(long, overrides_with = "show_source")]
+    pub hide_source: bool,
+
     #[command(subcommand)]
     pub command: Option<Command>,
 }
@@ -172,6 +182,16 @@ impl Cli {
     /// to the config file and then the default.
     pub fn visualizer_choice(&self) -> Option<bool> {
         match (self.visualizer, self.no_visualizer) {
+            (true, false) => Some(true),
+            (false, true) => Some(false),
+            _ => None,
+        }
+    }
+
+    /// `--show-source` / `--hide-source` as an override, or `None` to defer
+    /// to the config file and then the default.
+    pub fn show_source_choice(&self) -> Option<bool> {
+        match (self.show_source, self.hide_source) {
             (true, false) => Some(true),
             (false, true) => Some(false),
             _ => None,

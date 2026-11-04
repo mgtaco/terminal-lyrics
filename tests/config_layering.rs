@@ -33,6 +33,7 @@ dim_color = "#8888aa"
 word_by_word = false
 overlapping_voices = false
 visualizer = true
+show_source = false
 tick_ms = 77
 resync_threshold_ms = 333
 providers = ["kugou", "lrclib"]
@@ -83,6 +84,7 @@ fn file_overrides_every_default() {
     assert!(!cfg.word_by_word);
     assert!(!cfg.overlapping_voices);
     assert!(cfg.visualizer);
+    assert!(!cfg.show_source);
     assert_eq!(cfg.tick_ms, 77);
     assert_eq!(cfg.resync_threshold_ms, 333);
     assert_eq!(cfg.providers, vec![Provider::KuGou, Provider::LrcLib]);
@@ -96,6 +98,7 @@ fn file_overrides_every_default() {
     assert_ne!(cfg.word_by_word, d.word_by_word);
     assert_ne!(cfg.overlapping_voices, d.overlapping_voices);
     assert_ne!(cfg.visualizer, d.visualizer);
+    assert_ne!(cfg.show_source, d.show_source);
     assert_ne!(cfg.network, d.network);
     assert_ne!(cfg.providers, d.providers);
 }
@@ -379,4 +382,16 @@ fn a_malformed_dim_colour_is_rejected_rather_than_never_drawn() {
     assert!(ConfigFile::parse(r#"dim_color = "grey""#).is_err());
     assert!(ConfigFile::parse(r##"dim_color = "#888""##).is_err());
     assert!(ConfigFile::parse("dim_color = 8").is_err());
+}
+
+#[test]
+fn source_flags_override_the_file() {
+    assert!(
+        resolve("", &[]).show_source,
+        "the source is named by default"
+    );
+    assert!(!resolve("show_source = false", &[]).show_source);
+    assert!(resolve("show_source = false", &["--show-source"]).show_source);
+    assert!(!resolve("show_source = true", &["--hide-source"]).show_source);
+    assert!(!resolve("", &["--show-source", "--hide-source"]).show_source);
 }

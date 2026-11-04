@@ -547,7 +547,9 @@ fn status_line(app: &App) -> Option<String> {
         return Some(format!(" {notice}"));
     }
     match &app.state {
-        LyricState::Ready { source, .. } => Some(format!(" {}", source.short())),
+        LyricState::Ready { source, .. } if app.cfg.show_source => {
+            Some(format!(" {}", source.short()))
+        }
         _ => None,
     }
 }
@@ -703,6 +705,15 @@ async fn handle_key(
                 (_, false) => "visualizer off".to_string(),
             };
             app.remember("visualizer", app.cfg.visualizer, msg);
+        }
+        KeyCode::Char('h') => {
+            app.cfg.show_source = !app.cfg.show_source;
+            let msg = if app.cfg.show_source {
+                "source shown"
+            } else {
+                "source hidden"
+            };
+            app.remember("show_source", app.cfg.show_source, msg);
         }
         KeyCode::Char('r') => {
             if let Some(track) = app.engine.track().cloned() {
