@@ -1,4 +1,4 @@
-//! No Latin or Cyrillic letter is drawn blank, accents land where they should, and no two
+//! No Latin, Cyrillic or Greek letter is drawn blank, accents land where they should, and no two
 //! characters look the same.
 
 use terminal_lyrics::render::font::{self, Font, Glyph};
@@ -7,8 +7,9 @@ use terminal_lyrics::render::layout::layout;
 /// Everything drawn by hand in `src/render/fonts/`.
 const DRAWN: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789\
     ÆæŒœØøŁłĐđÐðĦħÞþßẞŊŋəıȷĲĳĿŀĸŉªº\
-    '\"‘’“”`,.…!¡?¿-–—_()[]:;/\\&#*+=<>@$%~^«»♪♫\
-    БГДЖЗИЛПУФЧШЩЦЪЬЫЄЭЮЯҐЉЊЋЂЏбвгджзиклмнптфцчшщъьыєэюяґљњђџ";
+    '\"‘’“”`,.…!¡?¿-–—_()[]:;/\\&#*+=<>@$%~^«»♪♫·\
+    БГДЖЗИЛПУФЧШЩЦЪЬЫЄЭЮЯҐЉЊЋЂЏбвгджзиклмнптфцчшщъьыєэюяґљњђџ\
+    ΔΘΛΞΣΨΩαβγδεζηθλμξπρσςτυχψω";
 
 /// Pairs that are meant to look alike.
 const TWINS: &[(char, char)] = &[
@@ -109,6 +110,18 @@ fn every_cyrillic_letter_is_drawn_as_art() {
     for f in fonts() {
         let missing: String = ('\u{400}'..='\u{45F}')
             .chain("Ґґ".chars())
+            .filter(|c| !matches!(f.draw(*c, &[]), Glyph::Art(b) if !b.is_blank()))
+            .collect();
+        assert!(missing.is_empty(), "{} cannot draw {missing:?}", f.name);
+    }
+}
+
+/// Modern Greek, with its accented letters.
+#[test]
+fn every_greek_letter_is_drawn_as_art() {
+    for f in fonts() {
+        let missing: String = ('\u{386}'..='\u{3CE}')
+            .filter(|c| c.is_alphabetic())
             .filter(|c| !matches!(f.draw(*c, &[]), Glyph::Art(b) if !b.is_blank()))
             .collect();
         assert!(missing.is_empty(), "{} cannot draw {missing:?}", f.name);

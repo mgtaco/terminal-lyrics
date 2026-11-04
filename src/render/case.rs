@@ -2,6 +2,8 @@
 //! that became `SS` would put every later highlight one letter out.
 
 use serde::Deserialize;
+use unicode_normalization::char::{compose, decompose_canonical};
+use unicode_script::{Script, UnicodeScript};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -15,7 +17,19 @@ impl Case {
     pub fn apply(self, text: &str) -> String {
         match self {
             Case::Upper => text.chars().map(upper).collect(),
-            Case::Lower => text.chars().map(lower).collect(),
+            Case::Lower => {
+                let chars: Vec<char> = text.chars().collect();
+                let letter = |i: Option<usize>| {
+                    i.and_then(|i| chars.get(i))
+                        .is_some_and(|c| c.is_alphabetic())
+                };
+                (0..chars.len())
+                    .map(|i| match chars[i] {
+                        'Σ' if letter(i.checked_sub(1)) && !letter(Some(i + 1)) => 'ς',
+                        c => lower(c),
+                    })
+                    .collect()
+            }
         }
     }
 
@@ -52,7 +66,22 @@ fn upper(c: char) -> char {
     if c == 'ß' {
         return 'ẞ';
     }
+    // Greek in capitals drops its accents but keeps the diaeresis: ά is Α and
+    // ΐ is Ϊ.
+    let c = match c.script() {
+        Script::Greek => without_accents(c),
+        _ => c,
+    };
     single(c.to_uppercase()).unwrap_or(c)
+}
+
+fn without_accents(c: char) -> char {
+    let mut parts = Vec::new();
+    decompose_canonical(c, |d| parts.push(d));
+    parts[1..]
+        .iter()
+        .filter(|m| **m == '\u{308}')
+        .fold(parts[0], |base, m| compose(base, *m).unwrap_or(base))
 }
 
 fn lower(c: char) -> char {
@@ -70,7 +99,7 @@ fn single(mut it: impl Iterator<Item = char>) -> Option<char> {
 mod tests {
     use super::*;
 
-    const MIXED: &str = "Straße İstanbul ŉ ǅ Ǆ ﬁ Señor";
+    const MIXED: &str = "Straße İstanbul ŉ ǅ Ǆ ﬁ Señor ΐΰ";
 
     #[test]
     fn every_case_keeps_the_character_count() {
@@ -87,6 +116,16 @@ mod tests {
     fn the_cases_do_what_they_say() {
         assert_eq!(Case::Upper.apply("Señor ß"), "SEÑOR ẞ");
         assert_eq!(Case::Lower.apply("Señor ẞ"), "señor ß");
+    }
+
+    #[test]
+    fn greek_capitals_lose_their_accents_but_not_the_diaeresis() {
+        assert_eq!(Case::Upper.apply("Σ' αγαπώ, ΐ ϋ"), "Σ' ΑΓΑΠΩ, Ϊ Ϋ");
+    }
+
+    #[test]
+    fn a_capital_sigma_ending_a_word_lowers_to_final_sigma() {
+        assert_eq!(Case::Lower.apply("ΟΔΟΣ ΣΑΣ, Σ'"), "οδος σας, σ'");
     }
 
     #[test]
