@@ -3,7 +3,7 @@
 # The prebuilt binary from the GitHub release, so installing needs no Rust
 # toolchain. `terminal-lyrics-git` builds from source instead.
 pkgname=terminal-lyrics-bin
-pkgver=0.4.0
+pkgver=0.5.0
 pkgrel=1
 pkgdesc="Giant block lyrics in your terminal, synced to whatever is playing"
 arch=('x86_64')
@@ -19,7 +19,7 @@ _dist="lyrics-${pkgver}-x86_64-unknown-linux-gnu"
 source=("${_dist}.tar.gz::${url}/releases/download/v${pkgver}/${_dist}.tar.gz")
 # GitHub's own digest for the release asset. `pkgver` and this are set by the
 # release workflow once the archives are up, so neither is bumped by hand.
-sha256sums=('d61da988aba7bcc49bb69235efe1b232c69adbd420209b105a3d843097a25aaa')
+sha256sums=('6f698e429453df40cf26e83b923e70779dac9065bb1d9315d09f8d164ecdfb22')
 
 package() {
     cd "${_dist}"
