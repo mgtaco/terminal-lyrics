@@ -52,11 +52,23 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y musl-tools cmake
 
+      # The runner's GCC defaults to x86-64-v3, which put AVX in aws-lc's C and
+      # made 0.5.0 die with SIGILL at startup on CPUs without it.
       - name: Build
         env:
           CC_x86_64_unknown_linux_musl: musl-gcc
           AR_x86_64_unknown_linux_musl: ar
+          CFLAGS_x86_64_unknown_linux_gnu: -march=x86-64
+          CFLAGS_x86_64_unknown_linux_musl: -march=x86-64
         run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Check it runs on a baseline x86-64 CPU
+        if: contains(matrix.target, '-linux-')
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y qemu-user
+          qemu-x86_64 -cpu qemu64 "target/${{ matrix.target }}/release/lyrics" --version
 
       # .tar.gz everywhere, Windows included (`tar` ships since Windows 10). No
       # checksum file: GitHub records each asset's SHA-256 on upload.
