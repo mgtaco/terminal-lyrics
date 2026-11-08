@@ -20,12 +20,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Later Ubuntu images build everything, glibc and musl included, for
+          # x86-64-v3, so 0.5.0 died with SIGILL on CPUs without AVX.
           - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
+            os: ubuntu-24.04
           # Statically linked, so one Linux download runs on any distro
           # regardless of how old its glibc is.
           - target: x86_64-unknown-linux-musl
-            os: ubuntu-latest
+            os: ubuntu-24.04
           - target: aarch64-apple-darwin
             os: macos-latest
           - target: x86_64-apple-darwin
@@ -52,14 +54,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y musl-tools cmake
 
-      # The runner's GCC defaults to x86-64-v3, which put AVX in aws-lc's C and
-      # made 0.5.0 die with SIGILL at startup on CPUs without it.
       - name: Build
         env:
           CC_x86_64_unknown_linux_musl: musl-gcc
           AR_x86_64_unknown_linux_musl: ar
-          CFLAGS_x86_64_unknown_linux_gnu: -march=x86-64
-          CFLAGS_x86_64_unknown_linux_musl: -march=x86-64
         run: cargo build --release --locked --target ${{ matrix.target }}
 
       - name: Check it runs on a baseline x86-64 CPU
