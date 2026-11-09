@@ -1,14 +1,15 @@
 //! System Media Transport Controls. WinRT wants a multithreaded apartment (see
 //! [`ensure_mta`]), and a `TimeSpan` counts 100-nanosecond ticks.
 
-use std::sync::Once;
+use std::sync::{Arc, Once};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, anyhow};
-use tokio::sync::mpsc;
+use tokio::sync::{Notify, mpsc};
 
 use super::{EventRx, EventTx, PlayerEvent, PlayerState, Snapshot, Track, fallback_id};
 
+use ::windows::Foundation::TypedEventHandler;
 use ::windows::Media::Control::GlobalSystemMediaTransportControlsSession as SmtcSession;
 use ::windows::Media::Control::GlobalSystemMediaTransportControlsSessionManager as SmtcManager;
 use ::windows::Media::Control::GlobalSystemMediaTransportControlsSessionPlaybackStatus as PlaybackStatus;
@@ -25,6 +26,10 @@ const MISSES_BEFORE_GONE: u32 = 3;
 const TICKS_PER_SECOND: f64 = 10_000_000.0;
 
 const STATUS_PLAYING: i32 = PlaybackStatus::Playing.0;
+
+/// How long after a change event to read, so the player has finished
+/// publishing the change.
+const SETTLE: Duration = Duration::from_millis(50);
 
 /// Plain owned values, so every decision happens in [`parse_sessions`] and can
 /// be tested without a media session.
@@ -255,6 +260,59 @@ fn now_ticks() -> i64 {
     UNIX_EPOCH_TICKS + (since_unix.as_nanos() / 100) as i64
 }
 
+type Unsubscribe = fn(&SmtcSession, i64) -> ::windows::core::Result<()>;
+
+/// Change subscriptions on every session a player owns; dropping it removes
+/// them, so a reconnect does not leave old handlers firing.
+struct Watch(Vec<(SmtcSession, i64, Unsubscribe)>);
+
+impl Drop for Watch {
+    fn drop(&mut self) {
+        for (session, token, unsubscribe) in &self.0 {
+            let _ = unsubscribe(session, *token);
+        }
+    }
+}
+
+fn waker<A: ::windows::core::RuntimeType + 'static>(
+    wake: &Arc<Notify>,
+) -> TypedEventHandler<SmtcSession, A> {
+    let wake = wake.clone();
+    // Runs on a WinRT thread; `Notify` folds a burst of events into one read.
+    TypedEventHandler::new(move |_, _| {
+        wake.notify_one();
+        Ok(())
+    })
+}
+
+/// Every session of the name, as two browser windows register one each and
+/// [`parse_sessions`] may pick either.
+async fn watch(name: &str, wake: &Arc<Notify>) -> Result<Watch> {
+    let mut subs: Vec<(SmtcSession, i64, Unsubscribe)> = Vec::new();
+    for session in live_sessions().await? {
+        let Some(app_id) = session.SourceAppUserModelId().ok().map(|h| h.to_string()) else {
+            continue;
+        };
+        if friendly_name(&app_id) != name {
+            continue;
+        }
+        if let Ok(t) = session.PlaybackInfoChanged(&waker(wake)) {
+            subs.push((session.clone(), t, SmtcSession::RemovePlaybackInfoChanged));
+        }
+        if let Ok(t) = session.TimelinePropertiesChanged(&waker(wake)) {
+            subs.push((
+                session.clone(),
+                t,
+                SmtcSession::RemoveTimelinePropertiesChanged,
+            ));
+        }
+        if let Ok(t) = session.MediaPropertiesChanged(&waker(wake)) {
+            subs.push((session, t, SmtcSession::RemoveMediaPropertiesChanged));
+        }
+    }
+    Ok(Watch(subs))
+}
+
 /// Run one probe, with a deadline.
 async fn probe() -> Result<Vec<Probe>> {
     let raw = tokio::time::timeout(PROBE_TIMEOUT, read_sessions())
@@ -337,8 +395,8 @@ impl PlayerHandle {
         toggle(&self.name).await
     }
 
-    /// Polling, like macOS: the `Tick` arm already re-anchors on divergence, so
-    /// SMTC's change events are not needed.
+    /// SMTC's change events only bring the next poll forward, so a reading
+    /// takes the same path either way and a missed event costs a second.
     pub fn spawn(self, poll_interval: Duration) -> (EventRx, tokio::task::JoinHandle<()>) {
         let (tx, rx) = mpsc::unbounded_channel();
         let handle = tokio::spawn(async move {
@@ -351,6 +409,10 @@ impl PlayerHandle {
         let mut ticker = tokio::time::interval(poll_interval);
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
+        let wake = Arc::new(Notify::new());
+        // Without it this is the poll alone, which still works.
+        let _watch = watch(&self.name, &wake).await.ok();
+
         let mut last_id: Option<String> = None;
         let mut primed = false;
         let mut misses = 0u32;
@@ -358,7 +420,12 @@ impl PlayerHandle {
         loop {
             // `interval` fires immediately the first time, so the consumer is
             // primed on this tick rather than a poll interval late.
-            ticker.tick().await;
+            tokio::select! {
+                _ = ticker.tick() => {}
+                // Spotify flips the status a moment before it stamps the new
+                // position; read at once and a pause can land seconds back.
+                _ = wake.notified() => tokio::time::sleep(SETTLE).await,
+            }
 
             let snap = match probe().await {
                 // The probe ran and our session was not in it: the app has

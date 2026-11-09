@@ -247,7 +247,7 @@ all, `dim_color = "#rrggbb"` (or `--dim-color`) names the colour outright.
 | :-: | --- | --- |
 | <img src="docs/icons/linux.svg" width="15" alt=""> | any MPRIS player | over D-Bus, with no subprocess anywhere |
 | <img src="docs/icons/apple.svg" width="15" alt=""> | Spotify and Apple Music | through their scripting dictionaries, once a second |
-| <img src="docs/icons/windows.svg" width="15" alt=""> | anything in the system media controls | the media flyout's API, once a second |
+| <img src="docs/icons/windows.svg" width="15" alt=""> | anything in the system media controls | the media flyout's API, as things change |
 
 <details>
 <summary><b>Details per platform</b></summary>
@@ -270,7 +270,8 @@ works there as on Linux. Neither app is ever launched
 by this program; one that is not already running simply is not listed.
 
 **Windows**: the System Media Transport Controls, the API behind the media
-flyout in the volume panel, polled like macOS. Like MPRIS and unlike
+flyout in the volume panel. It says when play, pause, the position or the track
+changes, and a read once a second backs that up. Like MPRIS and unlike
 AppleScript it discovers players rather than knowing them by name, so anything
 that registers a session can be followed. What it does not carry is a Spotify
 track id, so AMLL is stepped over; every other provider matches on artist and
