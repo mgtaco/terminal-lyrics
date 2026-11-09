@@ -3,24 +3,65 @@
 #![cfg(target_os = "windows")]
 
 use terminal_lyrics::player::fallback_id;
-use terminal_lyrics::player::windows::{RawSession, friendly_name, parse_sessions};
+use terminal_lyrics::player::windows::{RawSession, friendly_name, parse_sessions as parse};
+use windows::Media::Control::GlobalSystemMediaTransportControlsSessionPlaybackStatus as Status;
 
-/// `PlaybackStatus::Playing`; the value the backend treats as sound coming out.
-const PLAYING: i32 = 5;
-const PAUSED: i32 = 4;
+const PLAYING: i32 = Status::Playing.0;
+const PAUSED: i32 = Status::Paused.0;
 
 /// One second, in the 100-nanosecond ticks WinRT counts a `TimeSpan` in.
 const SECOND: i64 = 10_000_000;
+
+/// An arbitrary wall-clock moment, as a WinRT `DateTime`.
+const NOW: i64 = 134_000_000_000_000_000;
 
 fn session(app_id: &str, status: i32, position_ticks: i64, title: &str) -> RawSession {
     RawSession {
         app_id: app_id.to_string(),
         status,
         position_ticks,
+        updated_ticks: NOW,
         end_ticks: 233 * SECOND,
         title: title.to_string(),
         artist: "Ice Cube".to_string(),
         album: "Lethal Injection".to_string(),
+    }
+}
+
+fn parse_sessions(raw: &[RawSession]) -> Vec<terminal_lyrics::player::windows::Probe> {
+    parse(raw, NOW)
+}
+
+#[test]
+fn a_playing_position_is_carried_forward_from_when_it_was_reported() {
+    // Spotify refreshes the position only every few seconds; read raw, it
+    // lags by up to that much and every drift check yanks the lyrics back.
+    let mut raw = session("Spotify.exe", PLAYING, 55 * SECOND, "One");
+    raw.updated_ticks = NOW - 2 * SECOND;
+    let out = parse_sessions(&[raw]);
+    assert!((out[0].snapshot.position - 57.0).abs() < 1e-9);
+}
+
+#[test]
+fn a_paused_position_is_not_carried_forward() {
+    // Spotify keeps bumping the update time while paused.
+    let mut raw = session("Spotify.exe", PAUSED, 55 * SECOND, "One");
+    raw.updated_ticks = NOW - 2 * SECOND;
+    let out = parse_sessions(&[raw]);
+    assert!((out[0].snapshot.position - 55.0).abs() < 1e-9);
+}
+
+#[test]
+fn a_missing_or_future_update_time_leaves_the_position_alone() {
+    for updated in [0, NOW + 3 * SECOND] {
+        let mut raw = session("Spotify.exe", PLAYING, 55 * SECOND, "One");
+        raw.updated_ticks = updated;
+        let out = parse_sessions(&[raw]);
+        assert!(
+            (out[0].snapshot.position - 55.0).abs() < 1e-9,
+            "updated {updated}: got {}",
+            out[0].snapshot.position
+        );
     }
 }
 
@@ -90,6 +131,8 @@ fn an_unrecognisable_id_is_still_listed_rather_than_dropped() {
 
 #[test]
 fn only_the_playing_status_counts_as_playing() {
+    // Pinned to the raw values Spotify was seen sending: 4 playing, 5 paused.
+    assert_eq!((PLAYING, PAUSED), (4, 5));
     let out = parse_sessions(&[
         session("Spotify.exe", PLAYING, 0, "One"),
         session("msedge.exe", PAUSED, 0, "Two"),

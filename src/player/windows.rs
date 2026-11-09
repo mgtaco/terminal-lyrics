@@ -2,7 +2,7 @@
 //! [`ensure_mta`]), and a `TimeSpan` counts 100-nanosecond ticks.
 
 use std::sync::Once;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, anyhow};
 use tokio::sync::mpsc;
@@ -11,6 +11,7 @@ use super::{EventRx, EventTx, PlayerEvent, PlayerState, Snapshot, Track, fallbac
 
 use ::windows::Media::Control::GlobalSystemMediaTransportControlsSession as SmtcSession;
 use ::windows::Media::Control::GlobalSystemMediaTransportControlsSessionManager as SmtcManager;
+use ::windows::Media::Control::GlobalSystemMediaTransportControlsSessionPlaybackStatus as PlaybackStatus;
 use ::windows::Win32::System::Com::CoIncrementMTAUsage;
 
 /// How long one read of the session list may take before we give up on it.
@@ -23,9 +24,7 @@ const MISSES_BEFORE_GONE: u32 = 3;
 /// A WinRT `TimeSpan` is a count of 100-nanosecond ticks.
 const TICKS_PER_SECOND: f64 = 10_000_000.0;
 
-/// `PlaybackStatus::Playing`; the enum's other values run Closed, Opened,
-/// Changing, Stopped, Paused from zero.
-const STATUS_PLAYING: i32 = 5;
+const STATUS_PLAYING: i32 = PlaybackStatus::Playing.0;
 
 /// Plain owned values, so every decision happens in [`parse_sessions`] and can
 /// be tested without a media session.
@@ -36,6 +35,8 @@ pub struct RawSession {
     /// `PlaybackStatus` as its underlying integer.
     pub status: i32,
     pub position_ticks: i64,
+    /// `LastUpdatedTime` as a `DateTime`: when `position_ticks` was true.
+    pub updated_ticks: i64,
     pub end_ticks: i64,
     pub title: String,
     pub artist: String,
@@ -94,7 +95,7 @@ fn score(snap: &Snapshot) -> u8 {
 
 /// A session with no title is kept without a track: a browser playing an
 /// untitled video is still a player, just one without lyrics.
-pub fn parse_sessions(raw: &[RawSession]) -> Vec<Probe> {
+pub fn parse_sessions(raw: &[RawSession], now_ticks: i64) -> Vec<Probe> {
     let mut out: Vec<Probe> = Vec::new();
 
     for r in raw {
@@ -115,11 +116,19 @@ pub fn parse_sessions(raw: &[RawSession]) -> Vec<Probe> {
             url: None,
         });
 
+        let playing = r.status == STATUS_PLAYING;
+        // The position is as of `updated_ticks`, which Spotify moves only every
+        // few seconds while playing (and keeps moving while paused).
+        let age = if playing && r.updated_ticks > 0 {
+            (now_ticks - r.updated_ticks).max(0)
+        } else {
+            0
+        };
         let probe = Probe {
             name: friendly_name(&r.app_id),
             snapshot: Snapshot {
-                playing: r.status == STATUS_PLAYING,
-                position: seconds(r.position_ticks),
+                playing,
+                position: seconds(r.position_ticks + age),
                 track,
             },
         };
@@ -169,17 +178,25 @@ async fn live_sessions() -> Result<Vec<SmtcSession>> {
 
 /// Synchronous reads, so no apartment-bound object is alive when
 /// [`read_sessions`] awaits.
-fn read_sync(session: &SmtcSession) -> Option<(String, i32, i64, i64)> {
+fn read_sync(session: &SmtcSession) -> Option<RawSession> {
     let app_id = session.SourceAppUserModelId().ok()?.to_string();
     let status = session.GetPlaybackInfo().ok()?.PlaybackStatus().ok()?.0;
-    let (position_ticks, end_ticks) = match session.GetTimelineProperties() {
+    let (position_ticks, updated_ticks, end_ticks) = match session.GetTimelineProperties() {
         Ok(t) => (
             t.Position().map(|p| p.Duration).unwrap_or(0),
+            t.LastUpdatedTime().map(|d| d.UniversalTime).unwrap_or(0),
             t.EndTime().map(|e| e.Duration).unwrap_or(0),
         ),
-        Err(_) => (0, 0),
+        Err(_) => (0, 0, 0),
     };
-    Some((app_id, status, position_ticks, end_ticks))
+    Some(RawSession {
+        app_id,
+        status,
+        position_ticks,
+        updated_ticks,
+        end_ticks,
+        ..RawSession::default()
+    })
 }
 
 async fn read_sessions() -> Result<Vec<RawSession>> {
@@ -187,7 +204,7 @@ async fn read_sessions() -> Result<Vec<RawSession>> {
 
     let mut out = Vec::with_capacity(sessions.len());
     for session in sessions {
-        let Some((app_id, status, position_ticks, end_ticks)) = read_sync(&session) else {
+        let Some(mut raw) = read_sync(&session) else {
             continue;
         };
 
@@ -197,24 +214,12 @@ async fn read_sessions() -> Result<Vec<RawSession>> {
             Ok(op) => op.await.ok(),
             Err(_) => None,
         };
-        let (title, artist, album) = match props {
-            Some(p) => (
-                p.Title().map(|h| h.to_string()).unwrap_or_default(),
-                p.Artist().map(|h| h.to_string()).unwrap_or_default(),
-                p.AlbumTitle().map(|h| h.to_string()).unwrap_or_default(),
-            ),
-            None => (String::new(), String::new(), String::new()),
-        };
-
-        out.push(RawSession {
-            app_id,
-            status,
-            position_ticks,
-            end_ticks,
-            title,
-            artist,
-            album,
-        });
+        if let Some(p) = props {
+            raw.title = p.Title().map(|h| h.to_string()).unwrap_or_default();
+            raw.artist = p.Artist().map(|h| h.to_string()).unwrap_or_default();
+            raw.album = p.AlbumTitle().map(|h| h.to_string()).unwrap_or_default();
+        }
+        out.push(raw);
     }
 
     Ok(out)
@@ -241,6 +246,15 @@ async fn toggle(name: &str) -> Result<()> {
     Err(anyhow!("{name} is no longer registered as a media session"))
 }
 
+/// The wall clock as a WinRT `DateTime`: 100-nanosecond ticks since 1601.
+fn now_ticks() -> i64 {
+    const UNIX_EPOCH_TICKS: i64 = 116_444_736_000_000_000;
+    let since_unix = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
+    UNIX_EPOCH_TICKS + (since_unix.as_nanos() / 100) as i64
+}
+
 /// Run one probe, with a deadline.
 async fn probe() -> Result<Vec<Probe>> {
     let raw = tokio::time::timeout(PROBE_TIMEOUT, read_sessions())
@@ -248,7 +262,7 @@ async fn probe() -> Result<Vec<Probe>> {
         .map_err(|_| {
             anyhow!("the media session manager did not answer within {PROBE_TIMEOUT:?}")
         })??;
-    Ok(parse_sessions(&raw))
+    Ok(parse_sessions(&raw, now_ticks()))
 }
 
 /// Nothing to hold open: the session manager is asked for afresh each probe.
