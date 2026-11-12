@@ -45,8 +45,8 @@ pub struct Cli {
     pub no_network: bool,
 
     /// Lyrics providers to consult, in priority order, comma-separated.
-    /// Valid names: amll, betterlyrics, unison, lyricsplus, lrclib,
-    /// youtubemusic, kugou.
+    /// Valid names: betterlyrics, unison, lyricsplus, lrclib, youtubemusic,
+    /// kugou.
     #[arg(long, value_name = "LIST", value_delimiter = ',', value_parser = parse_provider)]
     pub providers: Option<Vec<Provider>>,
 
@@ -129,9 +129,6 @@ pub enum Command {
         /// Track length in seconds; greatly improves match accuracy.
         #[arg(long)]
         duration: Option<f64>,
-        /// Spotify track id or link, which is what `amll` is keyed on.
-        #[arg(long, value_name = "ID")]
-        spotify_id: Option<String>,
         /// Print the provider's answer as JSON instead of LRC.
         #[arg(long)]
         json: bool,

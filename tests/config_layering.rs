@@ -150,7 +150,6 @@ fn an_unknown_provider_name_is_rejected_and_the_valid_ones_are_named() {
         "the message names the typo: {full}"
     );
     for valid in [
-        "amll",
         "betterlyrics",
         "unison",
         "lyricsplus",

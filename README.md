@@ -193,8 +193,6 @@ output are replaced. Without cava nothing is drawn.
 ```bash
 lyrics status                 # player, track, position, and which source matched
 lyrics fetch --artist "Radiohead" --title "Creep" --duration 238
-lyrics fetch --artist "Kanye West" --title "Flashing Lights" \
-             --spotify-id 5TRPicyLGbAF2LGBFbHGvO   # word-timed, from AMLL
 lyrics fetch --artist "Daft Punk" --title "Get Lucky" --json   # the full answer, as JSON
 lyrics paths                  # where the config, cache and saved offsets live
 ```
@@ -265,17 +263,14 @@ works, which is most things.
 once a second. It knows those two by name rather than discovering players
 generally, because there is nothing left to discover with: the MediaRemote
 framework every now-playing tool used to call was restricted to entitled
-applications in macOS 15.4. Spotify still hands over its track id, so AMLL
-works there as on Linux. Neither app is ever launched
-by this program; one that is not already running simply is not listed.
+applications in macOS 15.4. Neither app is ever launched by this program; one
+that is not already running simply is not listed.
 
 **Windows**: the System Media Transport Controls, the API behind the media
 flyout in the volume panel. It says when play, pause, the position or the track
 changes, and a read once a second backs that up. Like MPRIS and unlike
 AppleScript it discovers players rather than knowing them by name, so anything
-that registers a session can be followed. What it does not carry is a Spotify
-track id, so AMLL is stepped over; every other provider matches on artist and
-title, so word-by-word lyrics work there as well.
+that registers a session can be followed.
 
 </details>
 
@@ -305,11 +300,10 @@ despite AppleScript having no seek notification to offer.
 Ahead of the network sit your own `--lrc-dir` files and, for a local file the
 player hands over as a `file://` URL, a lyrics file next to it:
 `song.lyricsfile.yaml`, `song.ttml`, `song.lrc` or `song.LRC`, in that order.
-Then seven providers:
+Then six providers:
 
 | source | timing | |
 | --- | :-: | --- |
-| [AMLL TTML DB](https://github.com/amll-dev/amll-ttml-db) | syllable | timed by hand, so the most accurate when it has the song, but only a few thousand songs. Keyed by Spotify track id, so only asked when the player is Spotify |
 | [BetterLyrics](https://better-lyrics.boidu.dev) | syllable | Apple Music's TTML, matched on title, artist, album and length |
 | [Unison](https://unison.betterlyrics.org) | syllable | BetterLyrics' community-submitted lyrics, TTML or enhanced LRC |
 | [LyricsPlus](https://github.com/ibratabian17/lyricsplus) | syllable | JSON with per-syllable timing and backing vocals marked word by word |
@@ -318,7 +312,7 @@ Then seven providers:
 | KuGou | word | its KRC format, decrypted and inflated; translations baked into the lyrics are dropped. Its timings are often off, so it comes last and wins only when nothing else has the song word-timed |
 
 ```toml
-providers = ["amll", "betterlyrics", "unison", "lyricsplus", "lrclib", "youtubemusic", "kugou"]
+providers = ["betterlyrics", "unison", "lyricsplus", "lrclib", "youtubemusic", "kugou"]
 ```
 
 Dropping a name turns that provider off, and the order is their priority. They
@@ -444,9 +438,7 @@ tacoproz1. This is a separate program written from scratch in Rust rather than a
 fork of that one, and it takes a different approach, with no music library to
 scan and no pre-processing pass.
 
-Lyrics come from the
-[AMLL TTML database](https://github.com/amll-dev/amll-ttml-db) (CC0),
-BetterLyrics and Unison,
+Lyrics come from BetterLyrics, Unison,
 [LyricsPlus](https://github.com/ibratabian17/lyricsplus), KuGou,
 [LRCLIB](https://lrclib.net) and YouTube Music. None of them is affiliated with
 this project. Third-party licences are in [licenses/](licenses/).

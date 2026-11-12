@@ -1,7 +1,6 @@
 //! A provider returns empty lyrics for "nothing here" and an error for "could
 //! not ask"; the cache, rate limit and race live in [`super::engine`].
 
-pub mod amll;
 pub mod betterlyrics;
 pub mod kugou;
 pub mod lrclib;

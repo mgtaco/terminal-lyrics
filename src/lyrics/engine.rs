@@ -106,7 +106,6 @@ impl Fetch for Builtin {
         let provider = self.provider;
         Box::pin(async move {
             match provider {
-                Provider::Amll => providers::amll::fetch(&http, &req).await,
                 Provider::BetterLyrics => providers::betterlyrics::fetch(&http, &req).await,
                 Provider::Unison => providers::unison::fetch(&http, &req).await,
                 Provider::LyricsPlus => providers::lyricsplus::fetch(&http, &req).await,

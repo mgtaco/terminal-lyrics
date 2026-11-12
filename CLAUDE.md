@@ -46,8 +46,8 @@ Re-render the demo GIFs when a change alters what they show.
   in `licenses/`) and shares its cache. Keep the lookup, request shape and cache
   format compatible with upstream, but do not name it in user-facing docs or
   code comments.
-- Additions upstream lacks, like the `amll` provider, are fine and stay; just
-  keep them out of the shared cache's track key.
+- Additions upstream lacks are fine and stay; just keep them out of the shared
+  cache's track key.
 - Nothing estimated or interpolated (e.g. the sweep highlight) is written to
   disk.
 - A new config key or flag goes in `config.example.toml` and the README in the

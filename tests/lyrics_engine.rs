@@ -9,8 +9,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use terminal_lyrics::lyrics::cache::{self, Cache, Entry};
 use terminal_lyrics::lyrics::engine::{Fetch, FetchFuture, Source};
 use terminal_lyrics::lyrics::model::{Line, Lyrics, Request, Word};
-use terminal_lyrics::lyrics::{self, Engine, Error, Origin, Provider};
-use terminal_lyrics::player::Track;
+use terminal_lyrics::lyrics::{Engine, Error, Origin, Provider};
 use tokio::sync::Notify;
 
 type Handler = dyn Fn(Provider, Request) -> FetchFuture + Send + Sync;
@@ -500,30 +499,4 @@ async fn the_cached_view_takes_the_best_entry_without_asking() {
     let answer = engine.cached(&r, &Provider::DEFAULT_ORDER).unwrap();
     assert_eq!(source(&answer), Some(Provider::KuGou));
     assert!(answer.cached);
-}
-
-#[test]
-fn a_spotify_track_carries_its_id_and_nothing_else_does() {
-    let spotify = |id: &str, url: Option<&str>| Track {
-        id: id.into(),
-        title: "Flashing Lights".into(),
-        artist: "Kanye West".into(),
-        url: url.map(str::to_string),
-        ..Default::default()
-    };
-    let linux = spotify(
-        "https://open.spotify.com/track/5TRPicyLGbAF2LGBFbHGvO",
-        Some("https://open.spotify.com/track/5TRPicyLGbAF2LGBFbHGvO"),
-    );
-    let macos = spotify("spotify:track:5TRPicyLGbAF2LGBFbHGvO", None);
-    for track in [&linux, &macos] {
-        assert_eq!(
-            lyrics::request_for(track, true).spotify_id,
-            "5TRPicyLGbAF2LGBFbHGvO"
-        );
-    }
-    let local = spotify("/org/mpris/MediaPlayer2/Track/3", Some("file:///m/a.flac"));
-    assert_eq!(lyrics::request_for(&local, true).spotify_id, "");
-    // The same song from another player shares the cache entries.
-    assert_eq!(lyrics::lookup_key(&linux), lyrics::lookup_key(&local));
 }

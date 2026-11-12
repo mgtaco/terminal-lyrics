@@ -112,7 +112,6 @@ pub fn local_lookup(dir: &Path, track: &Track) -> Option<Found> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
 #[serde(try_from = "String")]
 pub enum Provider {
-    Amll,
     BetterLyrics,
     Unison,
     LyricsPlus,
@@ -123,8 +122,7 @@ pub enum Provider {
 
 impl Provider {
     /// The documented order, and the default.
-    pub const DEFAULT_ORDER: [Provider; 7] = [
-        Provider::Amll,
+    pub const DEFAULT_ORDER: [Provider; 6] = [
         Provider::BetterLyrics,
         Provider::Unison,
         Provider::LyricsPlus,
@@ -137,7 +135,6 @@ impl Provider {
 
     pub fn name(self) -> &'static str {
         match self {
-            Provider::Amll => "amll",
             Provider::BetterLyrics => "betterlyrics",
             Provider::Unison => "unison",
             Provider::LyricsPlus => "lyricsplus",
@@ -174,6 +171,7 @@ impl std::str::FromStr for Provider {
         // provider was never reached.
         let why = match want.as_str() {
             "lrcmux" => " (removed in 0.3.0)",
+            "amll" => " (removed after 0.5.0)",
             _ => "",
         };
         Err(format!(
@@ -198,7 +196,7 @@ impl std::fmt::Display for Provider {
 }
 
 /// Title trimmed, artists joined, a length only over a second, and the file URL
-/// and Spotify id only when they apply.
+/// only when it applies.
 pub fn request_for(track: &Track, network: bool) -> Request {
     Request {
         title: track.title.trim().to_string(),
@@ -210,12 +208,6 @@ pub fn request_for(track: &Track, network: bool) -> Request {
             .clone()
             .filter(|u| u.starts_with("file://"))
             .unwrap_or_default(),
-        spotify_id: [Some(&track.id), track.url.as_ref()]
-            .into_iter()
-            .flatten()
-            .find_map(|key| providers::amll::spotify_track_id(key))
-            .unwrap_or_default()
-            .to_string(),
         cache_only: !network,
     }
 }

@@ -229,9 +229,6 @@ pub struct Request {
     pub duration: f64,
     /// The track's `file://` URL. Turns on the lookup next to the file.
     pub file_url: String,
-    /// The Spotify track id, when the player is Spotify. Only `amll` is keyed
-    /// on it, and it is no part of the cache key.
-    pub spotify_id: String,
     /// Never touch the network; local files and cached answers only.
     pub cache_only: bool,
 }
