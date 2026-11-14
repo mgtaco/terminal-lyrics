@@ -52,6 +52,8 @@ Re-render the demo GIFs when a change alters what they show.
   disk.
 - A new config key or flag goes in `config.example.toml` and the README in the
   same change.
+- The README is not hard-wrapped: each paragraph and list item is one line, so
+  it can be edited from a phone without re-wrapping.
 - Release archive names come from `.github/workflows/release.yml`;
   `install.sh` and `packaging/aur-bin/PKGBUILD` download them by name, so
   change all three together.
