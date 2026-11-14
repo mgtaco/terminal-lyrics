@@ -585,14 +585,22 @@ fn start_lookup(
     let order = app.cfg.providers.clone();
     let network = app.cfg.network;
     tokio::spawn(async move {
-        let outcome = crate::lyrics::lookup(&lookup, &order, &track, network)
-            .await
-            .map_err(anyhow::Error::from);
-        let _ = tx.send(FetchResult {
-            track_id: track.id.clone(),
-            key: crate::lyrics::lookup_key(&track),
-            outcome,
-        });
+        let key = crate::lyrics::lookup_key(&track);
+        let send = |outcome| {
+            let _ = tx.send(FetchResult {
+                track_id: track.id.clone(),
+                key: key.clone(),
+                outcome,
+            });
+        };
+        let outcome = crate::lyrics::lookup_with(&lookup, &order, &track, network, |early| {
+            if let Outcome::Found(_) = early {
+                send(Ok(early));
+            }
+        })
+        .await
+        .map_err(anyhow::Error::from);
+        send(outcome);
     });
 }
 

@@ -1,6 +1,6 @@
 //! Every provider at once. Sync outranks priority and the earlier provider wins
 //! among equals, so a fast answer is held while anything ahead could still
-//! match.
+//! match, and a slow provider with better sync still wins once it answers.
 
 use std::collections::HashMap;
 use std::future::Future;
@@ -18,7 +18,8 @@ use super::model::{Lyrics, Request};
 use super::providers::{self, Http};
 use super::sidecar;
 
-/// How long a priority winner is held for better sync still in flight.
+/// How long a priority winner is held back before it is offered as a stand-in
+/// while better sync is still in flight.
 pub const SYNC_GRACE: Duration = Duration::from_secs(2);
 /// The whole race.
 pub const LOOKUP_TIMEOUT: Duration = Duration::from_secs(12);
@@ -185,7 +186,18 @@ impl Engine {
     /// Sidecar files, then the cache, then the providers in `providers`, in
     /// priority order.
     pub async fn lookup(self: &Arc<Self>, req: &Request, providers: &[Provider]) -> Result<Answer> {
-        let answer = self.lookup_inner(req, providers).await;
+        self.lookup_with(req, providers, |_| {}).await
+    }
+
+    /// [`lookup`](Self::lookup), with `early` handed each better answer found
+    /// while a slower provider could still beat it.
+    pub async fn lookup_with(
+        self: &Arc<Self>,
+        req: &Request,
+        providers: &[Provider],
+        early: impl FnMut(&Answer) + Send,
+    ) -> Result<Answer> {
+        let answer = self.lookup_inner(req, providers, early).await;
         self.cache.prune();
         answer
     }
@@ -194,6 +206,7 @@ impl Engine {
         self: &Arc<Self>,
         req: &Request,
         providers: &[Provider],
+        early: impl FnMut(&Answer) + Send,
     ) -> Result<Answer> {
         if let Some(answer) = sidecar_answer(req) {
             return Ok(answer);
@@ -205,7 +218,7 @@ impl Engine {
         if ordered.is_empty() {
             return Ok(Answer::none());
         }
-        self.race(ordered, req).await
+        self.race(ordered, req, early).await
     }
 
     /// What the cache alone says, without waiting on anything: the best entry
@@ -243,6 +256,7 @@ impl Engine {
         self: &Arc<Self>,
         providers: Vec<(Provider, Source)>,
         req: &Request,
+        mut early: impl FnMut(&Answer) + Send,
     ) -> Result<Answer> {
         let count = providers.len();
         let word_sync: Vec<bool> = providers.iter().map(|(_, s)| s.word_sync).collect();
@@ -262,6 +276,8 @@ impl Engine {
         let deadline = tokio::time::sleep(self.timeout);
         tokio::pin!(deadline);
         let mut grace: Option<Pin<Box<tokio::time::Sleep>>> = None;
+        let mut grace_over = false;
+        let mut offered: Option<usize> = None;
 
         while remaining > 0 {
             tokio::select! {
@@ -273,8 +289,8 @@ impl Engine {
                         None => Err(Error::Timeout),
                     };
                 }
-                _ = async { grace.as_mut().expect("guarded").await }, if grace.is_some() => {
-                    return Ok(best_found(&results).map(|(b, _)| b.clone()).unwrap_or_else(Answer::none));
+                _ = async { grace.as_mut().expect("guarded").await }, if grace.is_some() && !grace_over => {
+                    grace_over = true;
                 }
                 joined = tasks.join_next() => {
                     remaining -= 1;
@@ -297,6 +313,10 @@ impl Engine {
                 && !upgrade_pending(&word_sync, &finished, index, tier)
             {
                 return Ok(best.clone());
+            }
+            if grace_over && offered != Some(index) {
+                offered = Some(index);
+                early(best);
             }
             if grace.is_none() && leader_found(&finished, &results) {
                 grace = Some(Box::pin(tokio::time::sleep(self.sync_grace)));

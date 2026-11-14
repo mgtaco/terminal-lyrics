@@ -253,8 +253,23 @@ pub async fn lookup(
     track: &Track,
     network: bool,
 ) -> Result<Outcome, Error> {
+    lookup_with(engine, order, track, network, |_| {}).await
+}
+
+/// [`lookup`], with `early` handed each better stand-in found while a slower
+/// provider could still beat it.
+pub async fn lookup_with(
+    engine: &Arc<Engine>,
+    order: &[Provider],
+    track: &Track,
+    network: bool,
+    mut early: impl FnMut(Outcome) + Send,
+) -> Result<Outcome, Error> {
     let req = request_for(track, network);
-    Ok(outcome_from(engine.lookup(&req, order).await?))
+    let answer = engine
+        .lookup_with(&req, order, |a| early(outcome_from(a.clone())))
+        .await?;
+    Ok(outcome_from(answer))
 }
 
 /// What can be shown right now without waiting: a sidecar or a cached answer.

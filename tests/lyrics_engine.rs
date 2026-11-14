@@ -151,12 +151,12 @@ async fn priority_holds_a_fast_lower_answer_and_cancels_the_rest() {
                     Provider::BetterLyrics => {
                         release.notified().await;
                         if high_found {
-                            Ok(plain("highest priority"))
+                            Ok(line_synced("highest priority"))
                         } else {
                             Err(Error::NotFound)
                         }
                     }
-                    Provider::LrcLib => Ok(plain("second priority")),
+                    Provider::LrcLib => Ok(line_synced("second priority")),
                     _ => {
                         let _guard = OnDrop(cancelled);
                         std::future::pending::<()>().await;
@@ -165,10 +165,11 @@ async fn priority_holds_a_fast_lower_answer_and_cancels_the_rest() {
                 }
             })
         });
+        // Last, YouTube Music never has word sync, so it cannot beat either.
         let order = [
             Provider::BetterLyrics,
             Provider::LrcLib,
-            Provider::LyricsPlus,
+            Provider::YouTubeMusic,
         ];
         let lookup = {
             let engine = engine.clone();
@@ -220,6 +221,26 @@ async fn word_sync_outranks_priority() {
         .await
         .unwrap();
     assert_eq!(source(&answer), Some(Provider::LyricsPlus));
+}
+
+#[tokio::test]
+async fn slow_word_sync_still_wins_after_a_stand_in() {
+    let engine = engine(|provider, _| match provider {
+        Provider::BetterLyrics => ready(line_synced("line synced")),
+        _ => Box::pin(async {
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            Ok(word_synced("word synced"))
+        }),
+    });
+    let mut early = Vec::new();
+    let answer = engine
+        .lookup_with(&req(), &[Provider::BetterLyrics, Provider::KuGou], |a| {
+            early.push(source(a))
+        })
+        .await
+        .unwrap();
+    assert_eq!(source(&answer), Some(Provider::KuGou));
+    assert_eq!(early, [Some(Provider::BetterLyrics)]);
 }
 
 #[tokio::test]

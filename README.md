@@ -320,8 +320,9 @@ are all asked at once, and the answer is chosen in two steps: better timing
 first (word over line over plain), then priority among answers that are equally
 good. So a fast line-level answer from LRCLIB is held while a word-timed
 provider is still out, and a fast word-timed answer from low in the list is held
-while one ahead of it could still match it. Once priority alone has a winner,
-the wait for better timing is two seconds at most, and the whole lookup twelve.
+while one ahead of it could still match it. Once priority alone has a winner
+it is shown after two seconds, but a slower provider with better timing still
+replaces it if it answers within the whole lookup's twelve seconds.
 A provider that is down is stepped over; the lookup only fails when every
 provider failed and none of them managed to say "not here". Lyrics with no
 timing at all are not shown.
