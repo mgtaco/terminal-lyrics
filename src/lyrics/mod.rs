@@ -171,7 +171,7 @@ impl std::str::FromStr for Provider {
         // provider was never reached.
         let why = match want.as_str() {
             "lrcmux" => " (removed in 0.3.0)",
-            "amll" => " (removed after 0.5.0)",
+            "amll" => " (removed after 0.5.2)",
             _ => "",
         };
         Err(format!(
