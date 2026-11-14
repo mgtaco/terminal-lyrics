@@ -682,7 +682,7 @@ async fn handle_key(
             let case = app.cfg.case.label();
             app.remember("case", case, format!("case: {case}"));
         }
-        KeyCode::Char('s') => {
+        KeyCode::Char('h') => {
             app.cfg.sweep = app.cfg.sweep.next();
             let active = matches!(
                 app.state,
@@ -714,7 +714,7 @@ async fn handle_key(
             };
             app.remember("visualizer", app.cfg.visualizer, msg);
         }
-        KeyCode::Char('h') => {
+        KeyCode::Char('s') => {
             app.cfg.show_source = !app.cfg.show_source;
             let msg = if app.cfg.show_source {
                 "source shown"

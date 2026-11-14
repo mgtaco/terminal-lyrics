@@ -127,12 +127,12 @@ lyrics
 | `f` | cycle font: block → compact → mini |
 | `c` | switch between capitals and lowercase |
 | `w` | one word at a time, or whole lines |
-| `s` | cycle the highlight: never → auto → always |
+| `h` | cycle the highlight: never → auto → always |
 | `v` | [cava](https://github.com/karlstav/cava)'s spectrum bars under the lyrics, on or off |
-| `h` | hide or show the lyrics source in the bottom-left corner |
+| `s` | hide or show the lyrics source in the bottom-left corner |
 | `r` | forget the cached lyrics and look them up again |
 
-What `f`, `c`, `w`, `s`, `v` and `h` choose is saved to your config file, so the
+What `f`, `c`, `w`, `h`, `v` and `s` choose is saved to your config file, so the
 next run starts the way you left it. A shift belongs to the song: fix one that
 runs late once and it stays fixed every time it comes on again. Closing the
 player does not close the lyrics; they pick up the next player that starts.
@@ -208,7 +208,7 @@ Settings live in `~/.config/terminal-lyrics/config.toml`, or
 `~/Library/Application Support/terminal-lyrics/config.toml` on macOS;
 `lyrics paths` prints the one this build actually reads.
 [`config.example.toml`](config.example.toml) lists every key. Flags override
-the file and the file overrides the defaults. The `f`, `c`, `w`, `s`, `v` and `h`
+the file and the file overrides the defaults. The `f`, `c`, `w`, `h`, `v` and `s`
 keys write their choice into this file, creating it if need be; only that one
 line changes, and your comments and layout are kept.
 

@@ -1,7 +1,7 @@
 # terminal-lyrics configuration.
 # Copy to ~/.config/terminal-lyrics/config.toml — every key is optional, and
 # every one of them is also a command-line flag, which takes precedence.
-# The f, c, w, s, v and h keys save their choice here (font, case, word_by_word,
+# The f, c, w, h, v and s keys save their choice here (font, case, word_by_word,
 # sweep, visualizer, show_source), changing only that line and keeping your
 # comments.
 
@@ -97,7 +97,7 @@ visualizer = false
 
 # Name the lyrics source (e.g. "lrclib") in the bottom-left corner. Set false
 # to leave the corner empty; the brief message after a keypress still shows
-# there. The `h` key toggles it.
+# there. The `s` key toggles it.
 show_source = true
 
 # Redraw interval in milliseconds (10–1000). Only the sweep moves between

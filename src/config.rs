@@ -153,7 +153,7 @@ impl Sweep {
         }
     }
 
-    /// Order used by the `s` key.
+    /// Order used by the `h` key.
     pub fn next(self) -> Sweep {
         match self {
             Sweep::Auto => Sweep::Always,
