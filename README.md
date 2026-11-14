@@ -119,7 +119,8 @@ lyrics
 
 | key | |
 | --- | --- |
-| `q` `Esc` | quit |
+| `?` | list every key with its current setting |
+| `q` `Esc` | quit (`Esc` closes the key list first) |
 | `space` | play/pause the player |
 | `,` `.` | shift lyrics 100 ms earlier / later, saved for this song |
 | `<` `>` | the same in whole seconds, for a song that is badly out |
@@ -130,9 +131,10 @@ lyrics
 | `h` | cycle the highlight: never → auto → always |
 | `v` | [cava](https://github.com/karlstav/cava)'s spectrum bars under the lyrics, on or off |
 | `s` | hide or show the lyrics source in the bottom-left corner |
+| `t` | hide or show the song's name in the bottom-right corner |
 | `r` | forget the cached lyrics and look them up again |
 
-What `f`, `c`, `w`, `h`, `v` and `s` choose is saved to your config file, so the
+What `f`, `c`, `w`, `h`, `v`, `s` and `t` choose is saved to your config file, so the
 next run starts the way you left it. A shift belongs to the song: fix one that
 runs late once and it stays fixed every time it comes on again. Closing the
 player does not close the lyrics; they pick up the next player that starts.
@@ -154,6 +156,7 @@ The flags worth knowing (`lyrics --help` lists them all):
 | `--dim-color '#9a9cae'` | a fixed colour for background vocals, instead of faint |
 | `--visualizer` | start with cava's spectrum bars on |
 | `--hide-source` | leave the bottom-left corner empty instead of naming the source |
+| `--hide-title` | leave the bottom-right corner empty instead of naming the song |
 
 <details>
 <summary><b>Per-song sync</b></summary>
@@ -208,8 +211,8 @@ Settings live in `~/.config/terminal-lyrics/config.toml`, or
 `~/Library/Application Support/terminal-lyrics/config.toml` on macOS;
 `lyrics paths` prints the one this build actually reads.
 [`config.example.toml`](config.example.toml) lists every key. Flags override
-the file and the file overrides the defaults. The `f`, `c`, `w`, `h`, `v` and `s`
-keys write their choice into this file, creating it if need be; only that one
+the file and the file overrides the defaults. The `f`, `c`, `w`, `h`, `v`, `s` and
+`t` keys write their choice into this file, creating it if need be; only that one
 line changes, and your comments and layout are kept.
 
 <details>

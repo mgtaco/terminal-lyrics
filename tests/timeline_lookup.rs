@@ -322,3 +322,41 @@ fn a_duet_partner_sweeps_to_its_own_word_timings() {
     let s = t.secondary(index, 13.25).unwrap();
     assert!((s.words.last().unwrap().end - 14.0).abs() < 0.001);
 }
+
+#[test]
+fn the_intro_is_a_wait_for_the_first_line() {
+    let t = tl(SONG);
+    assert_eq!(t.wait(0.0), Some((0.0, 10.0)));
+    assert_eq!(t.wait(9.9), Some((0.0, 10.0)));
+    assert_eq!(t.wait(10.0), None);
+}
+
+#[test]
+fn a_long_blank_line_is_a_wait_and_a_short_one_is_not() {
+    let t = tl("\
+[00:10.00]first line
+[00:14.00]
+[00:30.00]after the solo
+[00:33.00]
+[00:35.00]soon after
+");
+    assert_eq!(t.wait(12.0), None, "a line is being sung");
+    assert_eq!(t.wait(20.0), Some((14.0, 30.0)));
+    assert_eq!(t.wait(34.0), None, "two seconds is too short to count down");
+}
+
+#[test]
+fn a_finished_word_timed_line_waits_for_the_next() {
+    let t = tl("\
+[00:10.00]<00:10.00>one <00:10.50>two <00:11.00>
+[00:30.00]<00:30.00>three <00:31.00>
+");
+    assert_eq!(t.wait(10.7), None, "still singing");
+    assert_eq!(t.wait(20.0), Some((11.0, 30.0)));
+}
+
+#[test]
+fn line_level_lyrics_never_wait_mid_song() {
+    let t = tl(SONG);
+    assert_eq!(t.wait(19.0), None);
+}

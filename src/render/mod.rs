@@ -4,6 +4,7 @@ pub mod bars;
 pub mod case;
 pub mod font;
 pub mod layout;
+pub mod title;
 
 pub use self::case::Case;
 
@@ -105,10 +106,12 @@ pub enum Screen<'a> {
         /// Drawn above `text`.
         second: Option<SecondVoice<'a>>,
     },
+    /// No words until the next line: three dots fill as the wait runs out.
+    Waiting { elapsed: f64, total: f64 },
     /// Track known, lyrics being looked up.
-    Searching { label: &'a str },
+    Searching,
     /// Looked up, nothing found.
-    NoLyrics { label: &'a str },
+    NoLyrics,
     /// Nothing is playing.
     Idle { message: &'a str },
 }
@@ -179,12 +182,111 @@ pub fn render(
             let overhang = (first.map_or(0, |l| l.above), last.map_or(0, |l| l.below));
             vertically_centre(rows, height, overhang)
         }
-        Screen::Searching { label } => {
-            status_text(label, "searching for lyrics", width, height, theme)
-        }
-        Screen::NoLyrics { label } => status_text(label, "no lyrics found", width, height, theme),
-        Screen::Idle { message } => status_text("", message, width, height, theme),
+        Screen::Waiting { elapsed, total } => waiting(*elapsed, *total, font, width, height, theme),
+        Screen::Searching => status_text("searching for lyrics", width, height, theme),
+        Screen::NoLyrics => status_text("no lyrics found", width, height, theme),
+        Screen::Idle { message } => status_text(message, width, height, theme),
     }
+}
+
+/// One row of the key overlay. A row with no keys is a gap between groups.
+pub struct HelpRow<'a> {
+    pub keys: &'a str,
+    pub action: &'a str,
+    /// The setting as it is now, or empty for a key that only does something.
+    pub value: String,
+}
+
+/// The key overlay, as one block centred on the screen.
+pub fn help(rows: &[HelpRow<'_>], width: u16, height: u16, theme: Theme) -> Text<'static> {
+    let (width, height) = (width as usize, height as usize);
+    let keys_w = rows.iter().map(|r| r.keys.width()).max().unwrap_or(0);
+    let action_w = rows.iter().map(|r| r.action.width()).max().unwrap_or(0);
+    let block = rows
+        .iter()
+        .map(|r| keys_w + 3 + action_w + 2 + r.value.width())
+        .max()
+        .unwrap_or(0);
+    let pad = " ".repeat(width.saturating_sub(block) / 2);
+
+    let mut lines = vec![
+        centred("keys", width, Style::default().fg(theme.unsung)),
+        Line::default(),
+    ];
+    for r in rows {
+        if r.keys.is_empty() {
+            lines.push(Line::default());
+            continue;
+        }
+        lines.push(Line::from(vec![
+            Span::raw(pad.clone()),
+            Span::styled(
+                format!("{:<keys_w$}   ", r.keys),
+                Style::default()
+                    .fg(theme.unsung)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(format!("{:<action_w$}  ", r.action), theme.dim),
+            Span::styled(r.value.clone(), Style::default().fg(theme.unsung)),
+        ]));
+    }
+    lines.push(Line::default());
+    lines.push(centred("? or Esc to close", width, theme.dim));
+    vertically_centre(lines, height, (0, 0))
+}
+
+/// Three tiny dots that grow big one after another as the wait runs out: the
+/// one being waited on is middle-sized.
+fn waiting(
+    elapsed: f64,
+    total: f64,
+    font: &Font,
+    width: usize,
+    height: usize,
+    theme: Theme,
+) -> Text<'static> {
+    // The tiny one is quarter blocks from Unicode 16's octant set, a quarter
+    // cell each side of the middle of the dot.
+    const BIG: [[&str; 2]; 4] = [
+        ["    ", "    "],
+        [" \u{1CEA0}\u{1CEA3} ", " \u{1CEAB}\u{1CEA8} "],
+        [" ▄▄ ", " ▀▀ "],
+        ["▄██▄", "▀██▀"],
+    ];
+    const SMALL: [[&str; 1]; 4] = [[" "], ["·"], ["•"], ["●"]];
+    let elapsed = elapsed.clamp(0.0, total);
+    let edge = (total / 4.0).min(0.4);
+    // Done a moment early, so the last dot is seen full.
+    let fill = |i: usize| elapsed / (total - edge) * 3.0 - i as f64;
+    let size = |i: usize| match fill(i) {
+        _ if elapsed < edge / 2.0 => 0,
+        f if f >= 1.0 => 3,
+        f if f > 0.0 => 2,
+        _ => 1,
+    };
+    let style = Style::default().fg(theme.unsung);
+    let glyphs: Vec<Vec<&str>> = (0..3)
+        .map(|i| match font.is_plain() {
+            true => SMALL[size(i)].to_vec(),
+            false => BIG[size(i)].to_vec(),
+        })
+        .collect();
+    let dot_w = glyphs[0][0].width();
+    let pad = " ".repeat(width.saturating_sub(dot_w * 5) / 2);
+    let gap = " ".repeat(dot_w);
+    let rows = (0..glyphs[0].len())
+        .map(|row| {
+            let mut spans = vec![Span::raw(pad.clone())];
+            for (i, g) in glyphs.iter().enumerate() {
+                if i > 0 {
+                    spans.push(Span::raw(gap.clone()));
+                }
+                spans.push(Span::styled(g[row].to_string(), style));
+            }
+            Line::from(spans)
+        })
+        .collect();
+    vertically_centre(rows, height, (0, 0))
 }
 
 /// How a run of glyph art is coloured.
@@ -318,20 +420,8 @@ fn pad_to(s: &str, width: usize) -> String {
     }
 }
 
-fn status_text(
-    label: &str,
-    message: &str,
-    width: usize,
-    height: usize,
-    theme: Theme,
-) -> Text<'static> {
-    let mut rows: Vec<Line<'static>> = Vec::new();
-    if !label.is_empty() {
-        rows.push(centred(label, width, Style::default().fg(theme.unsung)));
-        rows.push(Line::default());
-    }
-    rows.push(centred(message, width, theme.dim));
-    vertically_centre(rows, height, (0, 0))
+fn status_text(message: &str, width: usize, height: usize, theme: Theme) -> Text<'static> {
+    vertically_centre(vec![centred(message, width, theme.dim)], height, (0, 0))
 }
 
 fn centred(text: &str, width: usize, style: Style) -> Line<'static> {

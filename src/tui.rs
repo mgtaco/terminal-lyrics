@@ -20,7 +20,7 @@ use crate::offsets::Offsets;
 use crate::player::{Link, PlayerEvent, PlayerHandle, Session, Track, pick_reconnect};
 use crate::prefs::Prefs;
 use crate::render::font::{self, Font};
-use crate::render::{Screen, SecondVoice, Theme, bars};
+use crate::render::{HelpRow, Screen, SecondVoice, Theme, bars, title};
 use crate::sync::{Change, SyncEngine};
 use crate::timeline::{Position, Timeline};
 
@@ -53,6 +53,13 @@ fn ready_from(found: crate::lyrics::Found) -> LyricState {
     }
 }
 
+/// The song's name, and the one it is typing over.
+struct Title {
+    from: String,
+    to: String,
+    since: Instant,
+}
+
 /// A finished background lookup, tagged with the track it was for so a slow
 /// result for a previous song cannot overwrite the current one.
 struct FetchResult {
@@ -76,6 +83,10 @@ pub struct App {
     theme: Theme,
     /// Sticky message shown briefly after a keypress, e.g. the new offset.
     notice: Option<(String, Instant)>,
+    title: Title,
+    /// The key overlay is open.
+    help: bool,
+    started: Instant,
     /// Why cava could not be started, once it has failed. It is not tried
     /// again: a cava that is not installed will not be on the next frame.
     cava_error: Option<String>,
@@ -101,6 +112,13 @@ impl App {
             font,
             theme,
             notice: None,
+            title: Title {
+                from: String::new(),
+                to: String::new(),
+                since: now,
+            },
+            help: false,
+            started: now,
             cava_error: None,
             should_quit: false,
         }
@@ -113,7 +131,24 @@ impl App {
         if matches!(change, Change::Track(_)) {
             self.adopt_track_offset();
         }
+        if matches!(change, Change::Track(_) | Change::Gone) {
+            let label = self.engine.track().map(Track::label).unwrap_or_default();
+            if label != self.title.to {
+                self.title = Title {
+                    from: self.title_text(now),
+                    to: label,
+                    since: now,
+                };
+            }
+        }
         change
+    }
+
+    /// The song's name as it should look at `now`, partway through typing
+    /// over the last one if it has just changed.
+    pub fn title_text(&self, now: Instant) -> String {
+        let t = &self.title;
+        title::typewriter(&t.from, &t.to, now.saturating_duration_since(t.since))
     }
 
     /// Called on every track change, so a correction for one song does not
@@ -369,8 +404,6 @@ fn draw(terminal: &mut DefaultTerminal, app: &App, cava: Option<&Cava>) -> Resul
         let now = Instant::now();
         let pos = app.engine.lyric_position(now);
 
-        let label = app.engine.track().map(Track::label).unwrap_or_default();
-
         // Held so the borrow lives as long as `screen`.
         let mut line_text = String::new();
         let mut second_text = String::new();
@@ -384,119 +417,128 @@ fn draw(terminal: &mut DefaultTerminal, app: &App, cava: Option<&Cava>) -> Resul
             LyricState::Idle => Screen::Idle {
                 message: "nothing playing",
             },
-            LyricState::Searching => Screen::Searching { label: &label },
-            LyricState::Missing => Screen::NoLyrics { label: &label },
+            LyricState::Searching => Screen::Searching,
+            LyricState::Missing => Screen::NoLyrics,
             LyricState::Ready {
                 timeline,
                 word_timed,
                 ..
-            } => match timeline.locate(pos) {
-                Position::Line { index } => {
-                    if let Some(line) = timeline.line(index) {
-                        let sweep = app.cfg.sweep.applies(*word_timed, app.cfg.word_by_word);
-                        highlight = if sweep {
-                            timeline.highlight_chars(index, pos)
-                        } else {
-                            0
-                        };
-
-                        // The parser always works out the second voice; this
-                        // only decides whether we ask.
-                        let mut voice = None;
-                        if app.cfg.overlapping_voices
-                            && let Some(s) = timeline.secondary(index, pos)
-                            && !s.text.trim().is_empty()
-                        {
-                            second_text = s.text.clone();
-                            second_background = s.background;
-                            second_reveal = s.text.chars().count();
-                            voice = Some(s);
-                        }
-                        let partner = voice.filter(|s| !s.background);
-
-                        // Word by word is decided per line: a source can tag
-                        // some lines and not others. A duet partner without
-                        // timings keeps both phrases whole, since one word
-                        // stacked under a whole phrase reads as a mistake.
-                        let split = app.cfg.word_by_word
-                            && !line.words.is_empty()
-                            && partner.is_none_or(|p| !p.words.is_empty());
-
-                        // The second voice gets the line's split, and a duet
-                        // partner its sweep; a background vocal is never swept.
-                        if let Some(s) = voice {
-                            second_highlight = if sweep {
-                                timeline.second_highlight_chars(index, pos)
+            } => match timeline.wait(pos) {
+                Some((start, end)) => Screen::Waiting {
+                    elapsed: pos - start,
+                    total: end - start,
+                },
+                None => match timeline.locate(pos) {
+                    Position::Line { index } => {
+                        if let Some(line) = timeline.line(index) {
+                            let sweep = app.cfg.sweep.applies(*word_timed, app.cfg.word_by_word);
+                            highlight = if sweep {
+                                timeline.highlight_chars(index, pos)
                             } else {
                                 0
                             };
-                            if split && !s.words.is_empty() {
-                                match timeline.second_active_word(index, pos) {
-                                    Some(word) => {
-                                        second_highlight =
-                                            second_highlight.saturating_sub(word.range.start);
-                                        second_reveal = word.revealed();
-                                        second_text = second_text
+
+                            // The parser always works out the second voice; this
+                            // only decides whether we ask.
+                            let mut voice = None;
+                            if app.cfg.overlapping_voices
+                                && let Some(s) = timeline.secondary(index, pos)
+                                && !s.text.trim().is_empty()
+                            {
+                                second_text = s.text.clone();
+                                second_background = s.background;
+                                second_reveal = s.text.chars().count();
+                                voice = Some(s);
+                            }
+                            let partner = voice.filter(|s| !s.background);
+
+                            // Word by word is decided per line: a source can tag
+                            // some lines and not others. A duet partner without
+                            // timings keeps both phrases whole, since one word
+                            // stacked under a whole phrase reads as a mistake.
+                            let split = app.cfg.word_by_word
+                                && !line.words.is_empty()
+                                && partner.is_none_or(|p| !p.words.is_empty());
+
+                            // The second voice gets the line's split, and a duet
+                            // partner its sweep; a background vocal is never swept.
+                            if let Some(s) = voice {
+                                second_highlight = if sweep {
+                                    timeline.second_highlight_chars(index, pos)
+                                } else {
+                                    0
+                                };
+                                if split && !s.words.is_empty() {
+                                    match timeline.second_active_word(index, pos) {
+                                        Some(word) => {
+                                            second_highlight =
+                                                second_highlight.saturating_sub(word.range.start);
+                                            second_reveal = word.revealed();
+                                            second_text = second_text
+                                                .chars()
+                                                .skip(word.range.start)
+                                                .take(word.range.len())
+                                                .collect();
+                                        }
+                                        None => second_text.clear(),
+                                    }
+                                }
+                            }
+
+                            match split {
+                                // The whole word goes to the renderer, so it is
+                                // laid out at its final size and does not crawl
+                                // sideways as its syllables fill in.
+                                true => {
+                                    // The line has started but its first word has
+                                    // not: hold the screen rather than flash the
+                                    // whole line for a frame.
+                                    if let Some(word) = timeline.active_word(index, pos) {
+                                        // The highlight is an offset into the whole
+                                        // line; rebase it onto the word on screen.
+                                        highlight = highlight.saturating_sub(word.range.start);
+                                        reveal = word.revealed();
+                                        line_text = line
+                                            .text
                                             .chars()
                                             .skip(word.range.start)
                                             .take(word.range.len())
                                             .collect();
                                     }
-                                    None => second_text.clear(),
+                                }
+                                false => {
+                                    line_text = line.text.clone();
+                                    reveal = line.char_len();
                                 }
                             }
                         }
-
-                        match split {
-                            // The whole word goes to the renderer, so it is
-                            // laid out at its final size and does not crawl
-                            // sideways as its syllables fill in.
-                            true => {
-                                // The line has started but its first word has
-                                // not: hold the screen rather than flash the
-                                // whole line for a frame.
-                                if let Some(word) = timeline.active_word(index, pos) {
-                                    // The highlight is an offset into the whole
-                                    // line; rebase it onto the word on screen.
-                                    highlight = highlight.saturating_sub(word.range.start);
-                                    reveal = word.revealed();
-                                    line_text = line
-                                        .text
-                                        .chars()
-                                        .skip(word.range.start)
-                                        .take(word.range.len())
-                                        .collect();
-                                }
-                            }
-                            false => {
-                                line_text = line.text.clone();
-                                reveal = line.char_len();
-                            }
+                        // Recased here rather than in the renderer: the mapping is
+                        // one character for one, so the offsets above still hold.
+                        line_text = app.cfg.case.apply(&line_text);
+                        second_text = app.cfg.case.apply(&second_text);
+                        Screen::Lyric {
+                            text: &line_text,
+                            highlight,
+                            reveal,
+                            second: (!second_text.is_empty()).then_some(SecondVoice {
+                                text: &second_text,
+                                background: second_background,
+                                highlight: second_highlight,
+                                reveal: second_reveal,
+                            }),
                         }
                     }
-                    // Recased here rather than in the renderer: the mapping is
-                    // one character for one, so the offsets above still hold.
-                    line_text = app.cfg.case.apply(&line_text);
-                    second_text = app.cfg.case.apply(&second_text);
-                    Screen::Lyric {
-                        text: &line_text,
-                        highlight,
-                        reveal,
-                        second: (!second_text.is_empty()).then_some(SecondVoice {
-                            text: &second_text,
-                            background: second_background,
-                            highlight: second_highlight,
-                            reveal: second_reveal,
-                        }),
-                    }
-                }
-                // During the intro and the outro, show whose song it is.
-                Position::Intro { .. } | Position::Outro => Screen::Idle { message: &label },
+                    // The song's name is in the corner already.
+                    Position::Intro { .. } | Position::Outro => Screen::Idle { message: "" },
+                },
             },
         };
 
         let lyric_height = area.height.saturating_sub(1);
-        let text = crate::render::render(&screen, &app.font, area.width, lyric_height, app.theme);
+        let text = match app.help {
+            true => crate::render::help(&help_rows(app), area.width, lyric_height, app.theme),
+            false => crate::render::render(&screen, &app.font, area.width, lyric_height, app.theme),
+        };
         // Where the lyrics end: the text is padded at the top to centre it and
         // not at the bottom, so its length is the row under its last line.
         let lyric_bottom = u16::try_from(text.lines.len())
@@ -525,9 +567,12 @@ fn draw(terminal: &mut DefaultTerminal, app: &App, cava: Option<&Cava>) -> Resul
             }
         }
 
-        if let Some(status) = status_line(app)
-            && area.height > 0
-        {
+        let right = match app.cfg.show_title {
+            true => app.title_text(now),
+            false => String::new(),
+        };
+        let status = title::status_row(&status_left(app), &right, usize::from(area.width));
+        if !status.is_empty() && area.height > 0 {
             let strip = ratatui::layout::Rect {
                 x: area.x,
                 y: area.y + area.height - 1,
@@ -542,16 +587,44 @@ fn draw(terminal: &mut DefaultTerminal, app: &App, cava: Option<&Cava>) -> Resul
 
 /// Just where the lyrics came from, or the notice after a keypress: everything
 /// else is on screen already or in `lyrics status`.
-fn status_line(app: &App) -> Option<String> {
+fn status_left(app: &App) -> String {
     if let Some(notice) = app.notice_text() {
-        return Some(format!(" {notice}"));
+        return notice.to_string();
+    }
+    let early = app.started.elapsed() < Duration::from_secs(5);
+    if (early || app.engine.track().is_none()) && !app.help {
+        return "? for keys".to_string();
     }
     match &app.state {
-        LyricState::Ready { source, .. } if app.cfg.show_source => {
-            Some(format!(" {}", source.short()))
-        }
-        _ => None,
+        LyricState::Ready { source, .. } if app.cfg.show_source => source.short(),
+        _ => String::new(),
     }
+}
+
+fn help_rows(app: &App) -> Vec<HelpRow<'static>> {
+    let on = |b: bool| if b { "on" } else { "off" }.to_string();
+    let shown = |b: bool| if b { "shown" } else { "hidden" }.to_string();
+    let row = |keys, action, value: String| HelpRow {
+        keys,
+        action,
+        value,
+    };
+    vec![
+        row("f", "font", app.font.name.to_string()),
+        row("c", "case", app.cfg.case.label().to_string()),
+        row("w", "word by word", on(app.cfg.word_by_word)),
+        row("h", "highlight", app.cfg.sweep.label().to_string()),
+        row("v", "visualizer", on(app.cfg.visualizer)),
+        row("s", "lyrics source", shown(app.cfg.show_source)),
+        row("t", "song name", shown(app.cfg.show_title)),
+        row("", "", String::new()),
+        row(", .", "sync ±100 ms", format!("{:+} ms", app.offset_ms())),
+        row("< >", "sync ±1 s", String::new()),
+        row("0", "reset sync", String::new()),
+        row("r", "look lyrics up again", String::new()),
+        row("space", "play / pause", String::new()),
+        row("q", "quit", String::new()),
+    ]
 }
 
 /// What is already known is shown at once, and the full race still runs behind
@@ -658,7 +731,9 @@ async fn handle_key(
         return;
     }
     match key.code {
+        KeyCode::Esc if app.help => app.help = false,
         KeyCode::Char('q') | KeyCode::Esc => app.should_quit = true,
+        KeyCode::Char('?') => app.help = !app.help,
         KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             app.should_quit = true;
         }
@@ -722,6 +797,15 @@ async fn handle_key(
                 "source hidden"
             };
             app.remember("show_source", app.cfg.show_source, msg);
+        }
+        KeyCode::Char('t') => {
+            app.cfg.show_title = !app.cfg.show_title;
+            let msg = if app.cfg.show_title {
+                "song name shown"
+            } else {
+                "song name hidden"
+            };
+            app.remember("show_title", app.cfg.show_title, msg);
         }
         KeyCode::Char('r') => {
             if let Some(track) = app.engine.track().cloned() {

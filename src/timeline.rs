@@ -32,6 +32,10 @@ impl ActiveWord {
     }
 }
 
+/// The shortest break in the middle of a song that is counted down; anything
+/// shorter keeps the last line on screen.
+pub const MIN_BREAK: f64 = 5.0;
+
 #[derive(Debug, Clone)]
 pub struct Timeline {
     lyrics: Lyrics,
@@ -75,6 +79,25 @@ impl Timeline {
             return Position::Outro;
         }
         Position::Line { index: idx }
+    }
+
+    /// The wordless stretch `pos` is in, as when it began and when the next
+    /// line starts: the intro, a blank line, or a word-timed line that has
+    /// finished, when the break is at least [`MIN_BREAK`].
+    pub fn wait(&self, pos: f64) -> Option<(f64, f64)> {
+        let lines = &self.lyrics.lines;
+        let first = lines.first()?;
+        if pos < first.start {
+            return Some((0.0, first.start));
+        }
+        let idx = lines.partition_point(|l| l.start <= pos) - 1;
+        let (line, next) = (&lines[idx], lines.get(idx + 1)?);
+        let start = match line.is_blank() && line.secondary.is_empty() {
+            true => line.start,
+            false => line.words.last().map(|w| w.end).filter(|e| e.is_finite())?,
+        };
+        let quiet = pos >= start && self.secondary(idx, pos).is_none();
+        (quiet && next.start - start >= MIN_BREAK).then_some((start, next.start))
     }
 
     /// Windowed rather than tied to the line, since a second voice rarely lines

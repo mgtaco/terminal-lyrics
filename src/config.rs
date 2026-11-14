@@ -194,6 +194,8 @@ pub struct Config {
     /// Name the lyrics source in the bottom-left corner. Keypress notices are
     /// shown either way.
     pub show_source: bool,
+    /// Name the song in the bottom-right corner.
+    pub show_title: bool,
     /// Redraw interval. Only the sweep highlight moves between player events.
     pub tick_ms: u64,
     /// How far the predicted position may drift from the player's own
@@ -220,6 +222,7 @@ impl Default for Config {
             overlapping_voices: true,
             visualizer: false,
             show_source: true,
+            show_title: true,
             tick_ms: 30,
             resync_threshold_ms: 250,
             providers: Provider::DEFAULT_ORDER.to_vec(),
@@ -245,6 +248,7 @@ pub struct ConfigFile {
     pub overlapping_voices: Option<bool>,
     pub visualizer: Option<bool>,
     pub show_source: Option<bool>,
+    pub show_title: Option<bool>,
     pub tick_ms: Option<u64>,
     pub resync_threshold_ms: Option<u64>,
     /// An unknown name here is an error, not a silent skip: it would otherwise
@@ -312,6 +316,10 @@ impl Config {
                 .show_source_choice()
                 .or(file.show_source)
                 .unwrap_or(d.show_source),
+            show_title: cli
+                .show_title_choice()
+                .or(file.show_title)
+                .unwrap_or(d.show_title),
             tick_ms: file.tick_ms.unwrap_or(d.tick_ms).clamp(10, 1000),
             resync_threshold_ms: file
                 .resync_threshold_ms

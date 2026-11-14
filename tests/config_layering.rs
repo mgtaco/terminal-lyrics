@@ -394,3 +394,11 @@ fn source_flags_override_the_file() {
     assert!(!resolve("show_source = true", &["--hide-source"]).show_source);
     assert!(!resolve("", &["--show-source", "--hide-source"]).show_source);
 }
+
+#[test]
+fn title_flags_override_the_file() {
+    assert!(resolve("", &[]).show_title, "the song is named by default");
+    assert!(!resolve("show_title = false", &[]).show_title);
+    assert!(resolve("show_title = false", &["--show-title"]).show_title);
+    assert!(!resolve("show_title = true", &["--hide-title"]).show_title);
+}

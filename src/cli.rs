@@ -110,6 +110,15 @@ pub struct Cli {
     #[arg(long, overrides_with = "show_source")]
     pub hide_source: bool,
 
+    /// Name the song in the bottom-right corner. This is the default;
+    /// `--hide-title` turns it off.
+    #[arg(long, overrides_with = "hide_title")]
+    pub show_title: bool,
+
+    /// Leave the bottom-right corner empty.
+    #[arg(long, overrides_with = "show_title")]
+    pub hide_title: bool,
+
     #[command(subcommand)]
     pub command: Option<Command>,
 }
@@ -189,6 +198,16 @@ impl Cli {
     /// to the config file and then the default.
     pub fn show_source_choice(&self) -> Option<bool> {
         match (self.show_source, self.hide_source) {
+            (true, false) => Some(true),
+            (false, true) => Some(false),
+            _ => None,
+        }
+    }
+
+    /// `--show-title` / `--hide-title` as an override, or `None` to defer to
+    /// the config file and then the default.
+    pub fn show_title_choice(&self) -> Option<bool> {
+        match (self.show_title, self.hide_title) {
             (true, false) => Some(true),
             (false, true) => Some(false),
             _ => None,

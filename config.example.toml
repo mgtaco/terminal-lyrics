@@ -1,9 +1,9 @@
 # terminal-lyrics configuration.
 # Copy to ~/.config/terminal-lyrics/config.toml — every key is optional, and
 # every one of them is also a command-line flag, which takes precedence.
-# The f, c, w, h, v and s keys save their choice here (font, case, word_by_word,
-# sweep, visualizer, show_source), changing only that line and keeping your
-# comments.
+# The f, c, w, h, v, s and t keys save their choice here (font, case,
+# word_by_word, sweep, visualizer, show_source, show_title), changing only that
+# line and keeping your comments.
 
 # Which player to follow. Omit to let the program choose, which prefers whatever
 # is actually playing. On Linux this is an MPRIS name, e.g. "spotify" or "vlc";
@@ -99,6 +99,10 @@ visualizer = false
 # to leave the corner empty; the brief message after a keypress still shows
 # there. The `s` key toggles it.
 show_source = true
+
+# Name the song in the bottom-right corner. A new name types over the old one.
+# Set false to leave the corner empty. The `t` key toggles it.
+show_title = true
 
 # Redraw interval in milliseconds (10–1000). Only the sweep moves between
 # player events, and unchanged cells are not redrawn at all.
