@@ -19,8 +19,7 @@
 
 </div>
 
-Run `lyrics`, play something, and the lyrics appear, one word at a time wherever the timings allow it. It follows your music player and pulls synced lyrics from seven sources. There is no library to scan and nothing to pre-process.
-
+Run `lyrics`, play something, and the lyrics appear one word at a time. It follows your music player and pulls synced lyrics from seven sources.
 ## Install
 
 **Linux or macOS**
