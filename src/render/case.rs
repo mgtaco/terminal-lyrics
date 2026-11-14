@@ -8,8 +8,8 @@ use unicode_script::{Script, UnicodeScript};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Case {
-    #[default]
     Upper,
+    #[default]
     Lower,
 }
 

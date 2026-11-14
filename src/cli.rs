@@ -28,7 +28,7 @@ pub struct Cli {
     #[arg(long, value_name = "NAME")]
     pub font: Option<String>,
 
-    /// Letter case: `upper` (the default) or `lower`.
+    /// Letter case: `upper` or `lower` (the default).
     #[arg(long, value_name = "CASE", value_parser = parse_case)]
     pub case: Option<Case>,
 

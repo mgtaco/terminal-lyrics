@@ -23,7 +23,7 @@ fn resolve(file_toml: &str, args: &[&str]) -> Config {
 const FULL_FILE: &str = r##"
 player = "file-player"
 font = "file-font"
-case = "lower"
+case = "upper"
 offset_ms = 111
 lrc_dir = "/file/lrc"
 network = false
@@ -44,10 +44,10 @@ fn defaults_apply_with_no_file_and_no_flags() {
     let cfg = resolve("", &[]);
     assert_eq!(cfg, Config::default());
     assert_eq!(cfg.font, "block");
-    assert_eq!(cfg.case, Case::Upper, "capitals, as it has always looked");
+    assert_eq!(cfg.case, Case::Lower, "lowercase unless asked for capitals");
     assert_eq!(cfg.offset_ms, 0);
     assert!(cfg.network);
-    assert_eq!(cfg.sweep, Sweep::Never, "the highlight is opt-in");
+    assert_eq!(cfg.sweep, Sweep::Auto, "highlighted only where it is real");
     assert_eq!(
         cfg.color_source,
         ColorSource::Terminal,
@@ -74,7 +74,7 @@ fn file_overrides_every_default() {
     let d = Config::default();
     assert_eq!(cfg.player.as_deref(), Some("file-player"));
     assert_eq!(cfg.font, "file-font");
-    assert_eq!(cfg.case, Case::Lower);
+    assert_eq!(cfg.case, Case::Upper);
     assert_eq!(cfg.offset_ms, 111);
     assert_eq!(cfg.lrc_dir, Some(PathBuf::from("/file/lrc")));
     assert!(!cfg.network);
@@ -184,7 +184,7 @@ fn flag_beats_file_for_font() {
 
 #[test]
 fn flag_beats_file_for_case() {
-    assert_eq!(resolve(FULL_FILE, &["--case", "upper"]).case, Case::Upper);
+    assert_eq!(resolve(FULL_FILE, &["--case", "lower"]).case, Case::Lower);
     assert!(Cli::try_parse_from(["lyrics", "--case", "original"]).is_err());
     assert!(ConfigFile::parse("case = \"original\"").is_err());
 }

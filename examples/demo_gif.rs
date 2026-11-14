@@ -47,8 +47,8 @@ const FRAMES: &[(&str, usize, u16)] = &[
 /// Inked half-cells: two rows per terminal row, top half first.
 type Grid = Vec<Vec<bool>>;
 
-/// The demo plays once in each case, capitals first as the program starts.
-const CASES: [Case; 2] = [Case::Upper, Case::Lower];
+/// The demo plays once in each case, lowercase first as the program starts.
+const CASES: [Case; 2] = [Case::Lower, Case::Upper];
 
 fn main() -> Result<()> {
     let frames: Vec<(&str, usize, u16, Case)> = CASES

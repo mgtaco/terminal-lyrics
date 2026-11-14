@@ -12,7 +12,7 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/demo-dark.gif">
-  <img alt="Word-timed lyrics appearing one word at a time, a long word building up syllable by syllable, first in capitals and then in lowercase" src="docs/demo-light.gif">
+  <img alt="Word-timed lyrics appearing one word at a time, a long word building up syllable by syllable, first in lowercase and then in capitals" src="docs/demo-light.gif">
 </picture>
 
 <sub>Rendered by the program itself.</sub>
@@ -353,14 +353,14 @@ pieces build the word up in place instead of flashing a syllable on its own.
 
 ### Highlight
 
-The highlight is a separate thing and is off unless you ask for it. `--sweep`
-lights up the sung part of whatever is on screen, moving across the current word
-in word-by-word mode and across the phrase otherwise. For line-level lyrics it
+The highlight is a separate thing. `--sweep` lights up the sung part of
+whatever is on screen, moving across the current word in word-by-word mode and
+across the phrase otherwise. For line-level lyrics it
 has to be interpolated from character counts between two real timestamps, which
 makes it an estimate, and `lyrics status` labels it as one. It remains a display
 effect throughout: nothing invented is ever written to disk.
 
-`auto` is the middle setting and it asks what the highlight would actually be
+`auto`, the default, is the middle setting, and it asks what the highlight would actually be
 telling you. Its job is to say which word of the line is being sung, so it wants
 real per-word timestamps to place it, and it wants the rest of the line there
 to place it against. One word at a time already answers the question by itself,

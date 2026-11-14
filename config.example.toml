@@ -16,7 +16,7 @@
 font = "block"
 
 # "upper" (all capitals) or "lower". `c` switches between them while it runs.
-case = "upper"
+case = "lower"
 
 # Where a song starts before you nudge it, in milliseconds; positive shows the
 # lyrics later. Nudging with `,` and `.` saves that song's own offset, which is
@@ -80,11 +80,12 @@ color_source = "terminal"
 # dim_color = "#9a9cae"
 
 # When to highlight the sung part of what is on screen.
-#   "never"  — no highlight (default)
+#   "never"  — no highlight
 #   "auto"   — only when the lyrics carry real per-word timestamps and the whole
 #              line is on screen; with word_by_word there is nothing to point at
+#              (default)
 #   "always" — also for line-level lyrics, where the highlight is an estimate
-sweep = "never"
+sweep = "auto"
 
 # Spectrum bars from cava under the lyrics. They stand on the status line and
 # reach halfway up the space between it and the text, so a long line that wraps

@@ -209,11 +209,11 @@ impl Default for Config {
         Self {
             player: None,
             font: "block".to_string(),
-            case: Case::Upper,
+            case: Case::Lower,
             offset_ms: 0,
             lrc_dir: None,
             network: true,
-            sweep: Sweep::Never,
+            sweep: Sweep::Auto,
             color_source: ColorSource::Terminal,
             dim_color: None,
             word_by_word: true,
