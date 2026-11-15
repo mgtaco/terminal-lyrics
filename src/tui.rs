@@ -97,8 +97,11 @@ pub struct App {
 impl App {
     pub fn new(cfg: Config, offsets: Offsets, prefs: Prefs, now: Instant) -> Self {
         let font = font::by_name(&cfg.font).unwrap_or_else(font::block);
+        let console = std::env::var("TERM").is_ok_and(|t| t == "linux");
         // Read once: the draw loop should not touch the filesystem.
-        let theme = Theme::with_accent(cfg.color_source.accent()).with_dim(cfg.dim_color);
+        let theme = Theme::with_accent(cfg.color_source.accent())
+            .on_console(console)
+            .with_dim(cfg.dim_color);
         let engine = SyncEngine::new(
             cfg.offset_ms,
             Duration::from_millis(cfg.resync_threshold_ms),
@@ -112,7 +115,7 @@ impl App {
             state: LyricState::Idle,
             font,
             theme,
-            console: std::env::var("TERM").is_ok_and(|t| t == "linux"),
+            console,
             notice: None,
             title: Title {
                 from: String::new(),
@@ -565,6 +568,7 @@ fn draw(terminal: &mut DefaultTerminal, app: &App, cava: Option<&Cava>) -> Resul
                     usize::from(rows),
                     usize::from(area.width),
                     app.theme.dim,
+                    app.console,
                 );
                 frame.render_widget(Paragraph::new(text), strip);
             }

@@ -91,11 +91,18 @@ fn bars_come_in_pairs_for_the_two_channels() {
 
 /// Levels on a scale of eight per row, so each step is one eighth block.
 fn rows(levels: &[u16], rows: usize, width: usize) -> Vec<String> {
-    render(levels, rows as u16 * 8, rows, width, Style::default())
-        .lines
-        .iter()
-        .map(|l| l.spans.iter().map(|s| s.content.as_ref()).collect())
-        .collect()
+    render(
+        levels,
+        rows as u16 * 8,
+        rows,
+        width,
+        Style::default(),
+        false,
+    )
+    .lines
+    .iter()
+    .map(|l| l.spans.iter().map(|s| s.content.as_ref()).collect())
+    .collect()
 }
 
 #[test]
@@ -109,7 +116,7 @@ fn a_bar_fills_from_the_bottom_in_eighths() {
 #[test]
 fn levels_are_fitted_to_however_many_rows_there_are() {
     let half = [500, 0];
-    let draw = |rows| render(&half, 1000, rows, 5, Style::default());
+    let draw = |rows| render(&half, 1000, rows, 5, Style::default(), false);
     let full = |rows: usize| -> usize {
         draw(rows)
             .lines
@@ -120,7 +127,7 @@ fn levels_are_fitted_to_however_many_rows_there_are() {
     assert_eq!(full(2), 1, "half of two rows");
     assert_eq!(full(8), 4, "half of eight");
     assert!(
-        render(&[1, 1], 1000, 2, 5, Style::default())
+        render(&[1, 1], 1000, 2, 5, Style::default(), false)
             .lines
             .iter()
             .all(|l| l.spans.iter().all(|s| s.content.trim().is_empty())),
@@ -139,4 +146,16 @@ fn a_frame_wider_than_the_window_loses_its_ends_not_its_middle() {
     // Four bars into room for two: the middle pair stays.
     let out = rows(&[8, 1, 2, 8], 1, 5);
     assert_eq!(out, ["▁▁ ▂▂"]);
+}
+
+#[test]
+fn the_console_gets_only_half_and_full_blocks() {
+    let levels: Vec<u16> = (0..=16).collect();
+    let text = render(&levels, 16, 2, 80, Style::default(), true);
+    let drawn: String = text.lines.iter().map(|l| l.to_string()).collect();
+    assert!(
+        drawn.chars().all(|c| matches!(c, ' ' | '▄' | '█')),
+        "{drawn:?}"
+    );
+    assert!(drawn.contains('▄') && drawn.contains('█'), "{drawn:?}");
 }

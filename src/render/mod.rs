@@ -60,6 +60,19 @@ impl Theme {
         }
     }
 
+    /// The Linux console takes brightness from every colour code, so a faint
+    /// set before one is lost, and dropping it again leaves white grey.
+    /// Palette 8 is its own grey there and reads fine on its black.
+    pub fn on_console(self, console: bool) -> Self {
+        match console {
+            false => self,
+            true => Self {
+                dim: Style::new().fg(Color::DarkGray),
+                ..self
+            },
+        }
+    }
+
     /// Draw the dimmed text in exactly `colour` instead, for a terminal whose
     /// faint attribute is too weak, too strong, or missing.
     pub fn with_dim(self, colour: Option<[u8; 3]>) -> Self {

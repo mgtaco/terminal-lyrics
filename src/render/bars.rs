@@ -1,4 +1,5 @@
-//! Spectrum bars, drawn in eighth blocks.
+//! Spectrum bars, drawn in eighth blocks, or half blocks on the Linux console,
+//! whose fonts have no other eighths.
 
 use ratatui::style::Style;
 use ratatui::text::{Line, Span, Text};
@@ -18,7 +19,14 @@ pub fn bar_count(width: usize) -> usize {
 
 /// Bars that do not fit (a frame from before a resize) are dropped from both
 /// ends, so the middle, where stereo puts the bass, stays put.
-pub fn render(levels: &[u16], max: u16, rows: usize, width: usize, style: Style) -> Text<'static> {
+pub fn render(
+    levels: &[u16],
+    max: u16,
+    rows: usize,
+    width: usize,
+    style: Style,
+    console: bool,
+) -> Text<'static> {
     let steps = rows * 8;
     let max = usize::from(max.max(1));
     // Rounded, so a whisper of noise does not leave a sliver under every bar.
@@ -38,7 +46,10 @@ pub fn render(levels: &[u16], max: u16, rows: usize, width: usize, style: Style)
                 if i > 0 {
                     text.extend(std::iter::repeat_n(' ', BAR_GAP));
                 }
-                let fill = scale(level).saturating_sub(floor).min(8);
+                let mut fill = scale(level).saturating_sub(floor).min(8);
+                if console {
+                    fill = (fill + 2) / 4 * 4;
+                }
                 text.extend(std::iter::repeat_n(EIGHTHS[fill], BAR_WIDTH));
             }
             Line::from(Span::styled(text.trim_end().to_string(), style))
