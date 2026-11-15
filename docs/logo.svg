@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="terminal-lyrics">
+<title>terminal-lyrics</title>
+<!-- Laid out on a 32px unit (the stroke): head 4x3, flag 4 wide, 1-unit gaps, > as tall as the head. -->
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#1E293B"/>
+<stop offset="1" stop-color="#0B1120"/>
+</linearGradient>
+</defs>
+<rect width="512" height="512" rx="112" fill="url(#bg)"/>
+<g transform="translate(8 0)" fill="none" stroke-width="32" stroke-linecap="round" stroke-linejoin="round">
+<path d="M240 352 V128 H336 V224" stroke="#F8FAFC"/>
+<rect x="128" y="304" width="128" height="96" rx="16" fill="#F8FAFC" stroke="none"/>
+<path d="M304 320 L352 352 L304 384" stroke="#4ADE80"/>
+</g>
+</svg>
