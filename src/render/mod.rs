@@ -107,7 +107,12 @@ pub enum Screen<'a> {
         second: Option<SecondVoice<'a>>,
     },
     /// No words until the next line: three dots fill as the wait runs out.
-    Waiting { elapsed: f64, total: f64 },
+    /// `console` is the Linux console, whose fonts lack the tiny dot's glyphs.
+    Waiting {
+        elapsed: f64,
+        total: f64,
+        console: bool,
+    },
     /// Track known, lyrics being looked up.
     Searching,
     /// Looked up, nothing found.
@@ -182,7 +187,11 @@ pub fn render(
             let overhang = (first.map_or(0, |l| l.above), last.map_or(0, |l| l.below));
             vertically_centre(rows, height, overhang)
         }
-        Screen::Waiting { elapsed, total } => waiting(*elapsed, *total, font, width, height, theme),
+        Screen::Waiting {
+            elapsed,
+            total,
+            console,
+        } => waiting(*elapsed, *total, *console, font, width, height, theme),
         Screen::Searching => status_text("searching for lyrics", width, height, theme),
         Screen::NoLyrics => status_text("no lyrics found", width, height, theme),
         Screen::Idle { message } => status_text(message, width, height, theme),
@@ -235,11 +244,12 @@ pub fn help(rows: &[HelpRow<'_>], width: u16, height: u16, theme: Theme) -> Text
     vertically_centre(lines, height, (0, 0))
 }
 
-/// Three tiny dots that grow big one after another as the wait runs out: the
-/// one being waited on is middle-sized.
+/// Three tiny dots that grow big one after another as the wait runs out, each
+/// through middle-sized to full before the next one starts, then nothing.
 fn waiting(
     elapsed: f64,
     total: f64,
+    console: bool,
     font: &Font,
     width: usize,
     height: usize,
@@ -247,41 +257,38 @@ fn waiting(
 ) -> Text<'static> {
     // The tiny one is quarter blocks from Unicode 16's octant set, a quarter
     // cell each side of the middle of the dot.
-    const BIG: [[&str; 2]; 4] = [
-        ["    ", "    "],
+    const BIG: [[&str; 2]; 3] = [
         [" \u{1CEA0}\u{1CEA3} ", " \u{1CEAB}\u{1CEA8} "],
         [" ▄▄ ", " ▀▀ "],
         ["▄██▄", "▀██▀"],
     ];
-    const SMALL: [[&str; 1]; 4] = [[" "], ["·"], ["•"], ["●"]];
-    let elapsed = elapsed.clamp(0.0, total);
-    let edge = (total / 4.0).min(0.4);
-    // Done a moment early, so the last dot is seen full.
-    let fill = |i: usize| elapsed / (total - edge) * 3.0 - i as f64;
-    let size = |i: usize| match fill(i) {
-        _ if elapsed < edge / 2.0 => 0,
-        f if f >= 1.0 => 3,
-        f if f > 0.0 => 2,
-        _ => 1,
-    };
-    let style = Style::default().fg(theme.unsung);
-    let glyphs: Vec<Vec<&str>> = (0..3)
-        .map(|i| match font.is_plain() {
-            true => SMALL[size(i)].to_vec(),
-            false => BIG[size(i)].to_vec(),
+    const SMALL: [[&str; 1]; 3] = [["·"], ["•"], ["●"]];
+    // Ten even parts: three for each dot, tiny then middle then full, and the
+    // last one blank.
+    let part = (elapsed.clamp(0.0, total) / total * 10.0) as usize;
+    if part >= 9 {
+        return Text::default();
+    }
+    let size = |i: usize| part.saturating_sub(3 * i).min(2);
+    let full = Style::default().fg(theme.unsung);
+    let dots: Vec<(Vec<&str>, Style)> = (0..3)
+        .map(|i| match (font.is_plain(), size(i)) {
+            (true, s) => (SMALL[s].to_vec(), full),
+            (false, 0) if console => (BIG[1].to_vec(), theme.dim),
+            (false, s) => (BIG[s].to_vec(), full),
         })
         .collect();
-    let dot_w = glyphs[0][0].width();
+    let dot_w = dots[0].0[0].width();
     let pad = " ".repeat(width.saturating_sub(dot_w * 5) / 2);
     let gap = " ".repeat(dot_w);
-    let rows = (0..glyphs[0].len())
+    let rows = (0..dots[0].0.len())
         .map(|row| {
             let mut spans = vec![Span::raw(pad.clone())];
-            for (i, g) in glyphs.iter().enumerate() {
+            for (i, (g, style)) in dots.iter().enumerate() {
                 if i > 0 {
                     spans.push(Span::raw(gap.clone()));
                 }
-                spans.push(Span::styled(g[row].to_string(), style));
+                spans.push(Span::styled(g[row].to_string(), *style));
             }
             Line::from(spans)
         })

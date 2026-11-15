@@ -106,8 +106,16 @@ fn the_key_overlay_lines_up_its_columns() {
 }
 
 fn dots(elapsed: f64, total: f64, font: &font::Font) -> Vec<String> {
+    dots_on(elapsed, total, false, font)
+}
+
+fn dots_on(elapsed: f64, total: f64, console: bool, font: &font::Font) -> Vec<String> {
     let text = render(
-        &Screen::Waiting { elapsed, total },
+        &Screen::Waiting {
+            elapsed,
+            total,
+            console,
+        },
         font,
         60,
         20,
@@ -123,7 +131,7 @@ fn dots(elapsed: f64, total: f64, font: &font::Font) -> Vec<String> {
 #[test]
 fn the_dots_grow_one_after_another() {
     let block = font::block();
-    let early = dots(1.0, 30.0, &block);
+    let early = dots(4.0, 30.0, &block);
     assert_eq!(early.len(), 2, "two rows of dots");
     assert_eq!(early[0].matches(" ▄▄ ").count(), 1, "{early:?}");
     assert_eq!(
@@ -131,9 +139,17 @@ fn the_dots_grow_one_after_another() {
         2,
         "{early:?}"
     );
+
+    let first_full = dots(11.0, 30.0, &block);
+    assert_eq!(first_full[0].matches("▄██▄").count(), 1, "{first_full:?}");
+    assert_eq!(
+        first_full[0].matches(" \u{1CEA0}\u{1CEA3} ").count(),
+        2,
+        "the next waits for the last to be full: {first_full:?}"
+    );
     let width = |rows: &[String]| rows.iter().map(|r| r.width()).collect::<Vec<_>>();
 
-    let late = dots(25.0, 30.0, &block);
+    let late = dots(22.0, 30.0, &block);
     assert_eq!(late[0].matches("▄██▄").count(), 2, "{late:?}");
     assert_eq!(late[0].matches(" ▄▄ ").count(), 1, "{late:?}");
     assert_eq!(
@@ -142,18 +158,34 @@ fn the_dots_grow_one_after_another() {
         "the dots stay put as they grow"
     );
 
-    let full = dots(29.7, 30.0, &block);
+    let full = dots(26.0, 30.0, &block);
     assert_eq!(full[0].matches("▄██▄").count(), 3, "the last is seen full");
 }
 
 #[test]
-fn the_dots_appear_and_stay_full_to_the_end() {
+fn the_dots_start_tiny_and_clear_before_the_words() {
     let block = font::block();
-    assert!(dots(0.0, 30.0, &block).is_empty());
-    assert_eq!(dots(29.75, 30.0, &block)[0].matches("▄██▄").count(), 3);
-    let mini = dots(15.0, 30.0, &font::mini());
+    let start = dots(0.0, 30.0, &block);
+    assert_eq!(
+        start[0].matches(" \u{1CEA0}\u{1CEA3} ").count(),
+        3,
+        "{start:?}"
+    );
+    assert!(
+        dots(27.5, 30.0, &block).is_empty(),
+        "the last tenth is blank"
+    );
+    assert!(dots(30.0, 30.0, &block).is_empty());
+    let mini = dots(13.0, 30.0, &font::mini());
     assert_eq!(mini.len(), 1);
     assert_eq!(mini[0].matches('●').count(), 1, "{mini:?}");
     assert_eq!(mini[0].matches('•').count(), 1, "{mini:?}");
     assert_eq!(mini[0].matches('·').count(), 1, "{mini:?}");
+}
+
+#[test]
+fn the_console_draws_the_tiny_dot_from_glyphs_it_has() {
+    let start = dots_on(0.0, 30.0, true, &font::block());
+    assert_eq!(start[0].matches(" ▄▄ ").count(), 3, "{start:?}");
+    assert!(start.iter().all(|r| !r.contains('\u{1CEA0}')), "{start:?}");
 }

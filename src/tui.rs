@@ -81,6 +81,7 @@ pub struct App {
     state: LyricState,
     font: Font,
     theme: Theme,
+    console: bool,
     /// Sticky message shown briefly after a keypress, e.g. the new offset.
     notice: Option<(String, Instant)>,
     title: Title,
@@ -111,6 +112,7 @@ impl App {
             state: LyricState::Idle,
             font,
             theme,
+            console: std::env::var("TERM").is_ok_and(|t| t == "linux"),
             notice: None,
             title: Title {
                 from: String::new(),
@@ -427,6 +429,7 @@ fn draw(terminal: &mut DefaultTerminal, app: &App, cava: Option<&Cava>) -> Resul
                 Some((start, end)) => Screen::Waiting {
                     elapsed: pos - start,
                     total: end - start,
+                    console: app.console,
                 },
                 None => match timeline.locate(pos) {
                     Position::Line { index } => {
