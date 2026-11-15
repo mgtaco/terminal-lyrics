@@ -1,8 +1,6 @@
 <div align="center">
 
-<img src="docs/logo.svg" width="128" alt="">
-
-# terminal-lyrics
+# <img src="docs/logo.svg" width="40" align="top" alt=""> terminal-lyrics
 
 **Giant block lyrics in your terminal, synced to whatever is playing.**
 
