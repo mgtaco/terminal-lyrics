@@ -105,8 +105,8 @@ show_source = true
 show_title = true
 
 # Redraw interval in milliseconds (10–1000). Only the sweep moves between
-# player events, and unchanged cells are not redrawn at all.
-# cava is asked for frames at the same rate, held between 10 and 60 a second.
+# player events, and unchanged cells are not redrawn at all. cava's bars
+# redraw on their own, 60 times a second.
 tick_ms = 30
 
 # How far the predicted position may drift from the player's own reading

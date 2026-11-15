@@ -371,9 +371,7 @@ fn sync_visualizer(app: &mut App, cava: &mut Option<Cava>, size: ratatui::layout
     let Some(bars) = want else {
         return;
     };
-    // As often as the screen is redrawn, within what cava will do.
-    let framerate = (1000 / app.cfg.tick_ms).clamp(10, 60) as u32;
-    match Cava::spawn(bars, framerate) {
+    match Cava::spawn(bars, 60) {
         Ok(c) => *cava = Some(c),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             app.cava_error = Some("cava is not installed".to_string());
@@ -546,19 +544,24 @@ fn draw(terminal: &mut DefaultTerminal, app: &App, cava: Option<&Cava>) -> Resul
             false => crate::render::render(&screen, &app.font, area.width, lyric_height, app.theme),
         };
         // Where the lyrics end: the text is padded at the top to centre it and
-        // not at the bottom, so its length is the row under its last line.
-        let lyric_bottom = u16::try_from(text.lines.len())
-            .unwrap_or(u16::MAX)
-            .min(lyric_height);
+        // not at the bottom, so its length is the row under its last line. An
+        // empty screen ends where the waiting dots would, so the bars do not
+        // shoot up when the dots clear.
+        let lyric_bottom = match text.lines.len() {
+            0 => lyric_height.saturating_sub(2) / 2 + 2,
+            n => u16::try_from(n).unwrap_or(u16::MAX),
+        }
+        .min(lyric_height);
         frame.render_widget(Paragraph::new(text), area);
 
-        // The bars stand on the status line and reach halfway up the empty
-        // space between it and the lyrics, so they never crowd the text.
+        // The bars stand a row above the status line and reach halfway up the
+        // empty space between it and the lyrics, so they never crowd the text.
         if let Some(c) = cava {
-            let rows = (lyric_height - lyric_bottom) / 2;
+            const GAP: u16 = 1;
+            let rows = (lyric_height - lyric_bottom).saturating_sub(GAP) / 2;
             if rows > 0 {
                 let strip = ratatui::layout::Rect {
-                    y: area.y + lyric_height - rows,
+                    y: area.y + lyric_height - GAP - rows,
                     height: rows,
                     ..area
                 };
