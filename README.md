@@ -41,6 +41,8 @@ Then run `lyrics` and play something. On macOS the first run will ask to let you
 
 <details>
 <summary><b>About the install script, and other ways to install</b></summary>
+<br>
+<table><tr><td>
 
 [`install.sh`](install.sh) grabs the archive for your machine from the latest release, checks its SHA-256 and puts `lyrics` in `~/.local/bin`. It will tell you if that is not on your `PATH` yet. Run it again to update, and delete `~/.local/bin/lyrics` to uninstall. Set `LYRICS_VERSION=0.3.0` for a particular release or `LYRICS_INSTALL_DIR` for another directory, on the `sh` side of the pipe. To read it first:
 
@@ -82,6 +84,8 @@ cargo build --release
 mkdir -p ~/.local/bin && install -m755 target/release/lyrics ~/.local/bin/lyrics
 ```
 
+</td></tr></table>
+<br>
 </details>
 
 ## Use
@@ -130,18 +134,26 @@ Handy flags (`lyrics --help` lists them all):
 
 <details>
 <summary><b>Per-song sync</b></summary>
+<br>
+<table><tr><td>
 
 Nudge a song with `,` and `.` in 100 ms steps, or with `<` and `>` in whole seconds when it is way out. The shift will come back every time that song plays, and every other song starts from `offset_ms` in the config. `0` puts a song back on the default.
 
 Shifts are kept in `~/.local/share/terminal-lyrics/offsets.json` (`~/Library/Application Support/terminal-lyrics/offsets.json` on macOS). Only songs you have nudged end up in it, so it is easy to edit by hand, and deleting it resets them all. `lyrics paths` prints where it is, and `lyrics status` shows whether the current song has a shift.
 
+</td></tr></table>
+<br>
 </details>
 
 <details>
 <summary><b>Visualizer</b></summary>
+<br>
+<table><tr><td>
 
 With [cava](https://github.com/karlstav/cava) installed, `v` (or `--visualizer`, or `visualizer = true` in the config) draws its spectrum bars under the lyrics, in the same faint colour as the status line. It reads the input settings from your own `~/.config/cava/config`, so if cava already listens to one player, these bars will too. Without cava, nothing is drawn.
 
+</td></tr></table>
+<br>
 </details>
 
 ### Without the TUI
@@ -161,6 +173,8 @@ Settings live in `~/.config/terminal-lyrics/config.toml` (`~/Library/Application
 
 <details>
 <summary><b>Colours</b></summary>
+<br>
+<table><tr><td>
 
 By default the lyrics use your terminal's palette, so they will match whatever theme you already have. If you want one accent colour instead:
 
@@ -174,6 +188,8 @@ That only repaints the lyrics (background vocals and status lines included); the
 
 Background vocals use the terminal's faint attribute, which holds up on translucent and blurred backgrounds. If yours draws it too weak, too strong or not at all, set `dim_color = "#rrggbb"` (or `--dim-color`).
 
+</td></tr></table>
+<br>
 </details>
 
 ## Platforms
@@ -186,6 +202,8 @@ Background vocals use the terminal's faint attribute, which holds up on transluc
 
 <details>
 <summary><b>Details per platform</b></summary>
+<br>
+<table><tr><td>
 
 Only the way it finds your player changes between platforms. That all lives in `src/player/`, and each binary carries just its own backend.
 
@@ -195,6 +213,8 @@ Only the way it finds your player changes between platforms. That all lives in `
 
 **Windows**: the System Media Transport Controls, the API behind the media flyout in the volume panel. Changes arrive as they happen, with a read once a second as backup, and any app that registers a session can be followed.
 
+</td></tr></table>
+<br>
 </details>
 
 ## How it works
