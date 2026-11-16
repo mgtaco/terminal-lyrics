@@ -60,24 +60,14 @@ Re-render the demo GIFs when a change alters what they show.
 - After pushing a release tag, `git pull` before the next push: the release
   workflow commits the PKGBUILD bump to `main` once the release is up.
 - When trying `install.sh`, set `LYRICS_INSTALL_DIR` to a scratch directory.
-  Its default, `~/.local/bin`, is where the dev build lives, and a test run
-  replaces it with the last release.
+  Its default, `~/.local/bin`, would replace the user's `lyrics` with the last
+  release.
 
 ## After making changes
 
-1. **Build and install** every time a change works, so the `lyrics` on PATH
-   has the change and can be tried:
-
-   ```bash
-   cargo build --release
-   install -m755 target/release/lyrics ~/.local/bin/lyrics
-   ```
-
-2. **Commit and push** to `origin main` only once the user has tried it and
-   says it is right. A change often gets adjusted after a first look, so
-   finish by saying it is installed and ready to try, and wait for the
-   go-ahead rather than pushing straight away.
+1. **Commit and push** to `origin main` only once the user has tried it and
+   says it is right.
 
 3. **Commit messages**: an imperative subject saying what changed for the
-   user ("Keep running when the player closes"), no prefix, then a body in
-   plain prose saying what it used to do and what it does now.
+   user ("Keep running when the player closes"), no prefix, then a body only if required in
+   plain prose.
