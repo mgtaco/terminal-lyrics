@@ -58,6 +58,15 @@ impl Source {
             Source::Provider { provider, .. } => provider.to_string(),
         }
     }
+
+    /// What a saved sync nudge is filed under. A file of the user's own is one
+    /// source wherever it sits.
+    pub fn sync_key(&self) -> &'static str {
+        match self {
+            Source::LocalFile(_) | Source::Sidecar(_) => "file",
+            Source::Provider { provider, .. } => provider.name(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

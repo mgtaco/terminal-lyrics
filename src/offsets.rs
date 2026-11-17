@@ -1,4 +1,5 @@
-//! Per-track sync offsets, keyed like the lyrics cache. Only tuned tracks are
+//! Per-track sync offsets, one for each source the track's lyrics have come
+//! from: two providers rarely share a timing error. Only tuned pairs are
 //! stored, and the file is re-read on every write so two running copies agree.
 
 use std::collections::BTreeMap;
@@ -10,20 +11,23 @@ use serde::{Deserialize, Serialize};
 /// come back as something the keys could never have produced.
 const LIMIT_MS: i64 = 30_000;
 
-const VERSION: u32 = 1;
+/// Version 1 kept one offset per track, tuned against whichever provider was
+/// showing at the time; there is no telling which, so those are not carried
+/// over.
+const VERSION: u32 = 2;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Entry {
-    offset_ms: i64,
     /// "Artist — Title", so the file can be read and edited by a human.
     label: String,
+    /// Keyed by [`crate::lyrics::Source::sync_key`].
+    offsets: BTreeMap<String, i64>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct Saved {
     version: u32,
-    /// Keyed by [`crate::player::Track::id`] — the same key the lyrics cache
-    /// uses, so a track that resolves to one cache entry has one offset.
+    /// Keyed by [`crate::player::Track::id`].
     tracks: BTreeMap<String, Entry>,
 }
 
@@ -64,39 +68,48 @@ impl Offsets {
         self.path.as_deref()
     }
 
-    /// The saved offset for a track, if it has ever been tuned.
-    pub fn get(&self, key: &str) -> Option<i64> {
-        self.read().tracks.get(key).map(|e| e.offset_ms)
+    /// The saved offset for a track's lyrics from `source`, if it has ever
+    /// been tuned.
+    pub fn get(&self, track: &str, source: &str) -> Option<i64> {
+        self.read().tracks.get(track)?.offsets.get(source).copied()
     }
 
-    pub fn offset_for(&self, key: &str, default_ms: i64) -> i64 {
-        self.get(key).unwrap_or(default_ms)
+    pub fn offset_for(&self, track: &str, source: &str, default_ms: i64) -> i64 {
+        self.get(track, source).unwrap_or(default_ms)
     }
 
-    /// An empty key means the player gave nothing stable to remember it
+    /// An empty track key means the player gave nothing stable to remember it
     /// against.
-    pub fn set(&mut self, key: &str, label: &str, offset_ms: i64) {
-        if key.is_empty() {
+    pub fn set(&mut self, track: &str, source: &str, label: &str, offset_ms: i64) {
+        if track.is_empty() || source.is_empty() {
             return;
         }
         let mut tracks = self.read().tracks;
-        tracks.insert(
-            key.to_string(),
-            Entry {
-                offset_ms: offset_ms.clamp(-LIMIT_MS, LIMIT_MS),
-                label: label.to_string(),
-            },
-        );
+        let entry = tracks.entry(track.to_string()).or_insert_with(|| Entry {
+            label: String::new(),
+            offsets: BTreeMap::new(),
+        });
+        entry.label = label.to_string();
+        entry
+            .offsets
+            .insert(source.to_string(), offset_ms.clamp(-LIMIT_MS, LIMIT_MS));
         self.commit(tracks);
     }
 
     /// Absence is how "not tuned" is spelled, so the track starts from the
     /// default.
-    pub fn clear(&mut self, key: &str) {
+    pub fn clear(&mut self, track: &str, source: &str) {
         let mut tracks = self.read().tracks;
-        if tracks.remove(key).is_some() {
-            self.commit(tracks);
+        let Some(entry) = tracks.get_mut(track) else {
+            return;
+        };
+        if entry.offsets.remove(source).is_none() {
+            return;
         }
+        if entry.offsets.is_empty() {
+            tracks.remove(track);
+        }
+        self.commit(tracks);
     }
 
     /// How many tracks have been tuned. Reported by `lyrics paths`.

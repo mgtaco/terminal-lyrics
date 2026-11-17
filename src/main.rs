@@ -172,10 +172,6 @@ async fn cmd_status(cfg: &Config) -> Result<()> {
             .unwrap_or_else(|| "(not reported)".into())
     );
     println!("track id  {}", track.id);
-    match Offsets::new(config::offsets_path()).get(&track.id) {
-        Some(ms) => println!("tuned     {ms:+}ms  (saved for this song)"),
-        None => println!("tuned     no  (using the default above)"),
-    }
     println!(
         "providers {}",
         if cfg.providers.is_empty() {
@@ -207,7 +203,7 @@ async fn cmd_status(cfg: &Config) -> Result<()> {
     if let Some(dir) = cfg.lrc_dir.as_deref()
         && let Some(found) = terminal_lyrics::lyrics::local_lookup(dir, &track)
     {
-        report_lyrics(cfg, &found);
+        report_lyrics(cfg, &track, &found);
         return Ok(());
     }
 
@@ -221,14 +217,14 @@ async fn cmd_status(cfg: &Config) -> Result<()> {
             .unwrap_or_else(|| "(unavailable)".into())
     );
     match lyrics::lookup(&engine, &cfg.providers, &track, cfg.network).await? {
-        Outcome::Found(found) => report_lyrics(cfg, &found),
+        Outcome::Found(found) => report_lyrics(cfg, &track, &found),
         Outcome::Missing if cfg.network => println!("lyrics    (none found)"),
         Outcome::Missing => println!("lyrics    (none cached; network disabled)"),
     }
     Ok(())
 }
 
-fn report_lyrics(cfg: &Config, found: &terminal_lyrics::lyrics::Found) {
+fn report_lyrics(cfg: &Config, track: &Track, found: &terminal_lyrics::lyrics::Found) {
     let word_timed = found.lyrics.has_word_timings();
     println!(
         "lyrics    {} · {} · {} lines · {}",
@@ -258,6 +254,11 @@ fn report_lyrics(cfg: &Config, found: &terminal_lyrics::lyrics::Found) {
             "off"
         }
     );
+    let source = found.source.sync_key();
+    match Offsets::new(config::offsets_path()).get(&track.id, source) {
+        Some(ms) => println!("tuned     {ms:+}ms  (saved for this song on {source})"),
+        None => println!("tuned     no  (using the default above)"),
+    }
 }
 
 async fn cmd_run(cfg: Config, prefs: Prefs) -> Result<()> {

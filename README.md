@@ -137,9 +137,9 @@ Handy flags (`lyrics --help` lists them all):
 <br>
 <table><tr><td>
 
-Nudge a song with `,` and `.` in 100 ms steps, or with `<` and `>` in whole seconds when it is way out. The shift will come back every time that song plays, and every other song starts from `offset_ms` in the config. `0` puts a song back on the default.
+Nudge a song with `,` and `.` in 100 ms steps, or with `<` and `>` in whole seconds when it is way out. The shift comes back every time that song plays with lyrics from the same provider. Each provider gets its own shift, since they're rarely off by the same amount, and every untuned song or provider starts from `offset_ms` in the config. `0` puts it back on the default.
 
-Shifts are kept in `~/.local/share/terminal-lyrics/offsets.json` (`~/Library/Application Support/terminal-lyrics/offsets.json` on macOS). Only songs you have nudged end up in it, so it is easy to edit by hand, and deleting it resets them all. `lyrics paths` prints where it is, and `lyrics status` shows whether the current song has a shift.
+Shifts are kept in `~/.local/share/terminal-lyrics/offsets.json` (`~/Library/Application Support/terminal-lyrics/offsets.json` on macOS). Only songs you have nudged end up in it, listed by provider, so it is easy to edit by hand, and deleting it resets them all. `lyrics paths` prints where it is, and `lyrics status` shows whether the current song has a shift for the provider it's using.
 
 </td></tr></table>
 <br>

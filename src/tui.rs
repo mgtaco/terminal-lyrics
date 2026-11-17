@@ -73,8 +73,8 @@ struct FetchResult {
 pub struct App {
     cfg: Config,
     engine: SyncEngine,
-    /// Per-track sync nudges, reloaded on every track change and written back
-    /// on every keypress that moves one.
+    /// Sync nudges per track and lyrics source, reloaded whenever the lyrics
+    /// change and written back on every keypress that moves one.
     offsets: Offsets,
     /// Where the display keys save their choices: the config file.
     prefs: Prefs,
@@ -129,12 +129,12 @@ impl App {
         }
     }
 
-    /// Adopts the new track's saved offset here, where it cannot be forgotten;
-    /// the caller still starts the lookup.
+    /// The last song's lyrics are dropped here, where it cannot be forgotten,
+    /// so its offset does not carry over; the caller starts the lookup.
     pub fn apply_player_event(&mut self, event: PlayerEvent, now: Instant) -> Change {
         let change = self.engine.apply(event, now);
         if matches!(change, Change::Track(_)) {
-            self.adopt_track_offset();
+            self.show(LyricState::Searching);
         }
         if matches!(change, Change::Track(_) | Change::Gone) {
             let label = self.engine.track().map(Track::label).unwrap_or_default();
@@ -156,45 +156,53 @@ impl App {
         title::typewriter(&t.from, &t.to, now.saturating_duration_since(t.since))
     }
 
-    /// Called on every track change, so a correction for one song does not
-    /// follow you into the next.
-    pub fn adopt_track_offset(&mut self) {
-        let key = self
-            .engine
-            .track()
-            .map(|t| t.id.clone())
-            .unwrap_or_default();
-        let offset = self.offsets.offset_for(&key, self.cfg.offset_ms);
+    pub fn show_found(&mut self, found: crate::lyrics::Found) {
+        self.show(ready_from(found));
+    }
+
+    /// Every change of lyrics goes through here: the offset belongs to the
+    /// song and the source its lyrics came from, so either changing picks up
+    /// the one saved for the new pair.
+    fn show(&mut self, state: LyricState) {
+        self.state = state;
+        let offset = match self.sync_target() {
+            Some((track, source, _)) => self.offsets.offset_for(&track, source, self.cfg.offset_ms),
+            None => self.cfg.offset_ms,
+        };
         self.engine.clock_mut().set_offset_ms(offset);
     }
 
-    /// Shift the current track and remember the result.
-    pub fn nudge_offset(&mut self, delta_ms: i64) {
+    /// The track id, source and label a nudge is saved under, while there are
+    /// lyrics to nudge.
+    fn sync_target(&self) -> Option<(String, &'static str, String)> {
+        let track = self.engine.track()?;
+        let LyricState::Ready { source, .. } = &self.state else {
+            return None;
+        };
+        Some((track.id.clone(), source.sync_key(), track.label()))
+    }
+
+    /// Shift the current lyrics and remember the result. Returns the source it
+    /// was saved for, if there were lyrics to save it against.
+    pub fn nudge_offset(&mut self, delta_ms: i64) -> Option<&'static str> {
         self.engine.clock_mut().nudge_offset_ms(delta_ms);
-        self.save_offset();
+        let (track, source, label) = self.sync_target()?;
+        let offset = self.engine.clock().offset_ms();
+        // Absence spells "never tuned", so a later change to the default
+        // still reaches this song.
+        if offset == self.cfg.offset_ms {
+            self.offsets.clear(&track, source);
+        } else {
+            self.offsets.set(&track, source, &label, offset);
+        }
+        Some(source)
     }
 
     /// Back to the configured starting point, and forgotten.
     pub fn reset_offset(&mut self) {
         self.engine.clock_mut().set_offset_ms(self.cfg.offset_ms);
-        if let Some(track) = self.engine.track() {
-            let key = track.id.clone();
-            self.offsets.clear(&key);
-        }
-    }
-
-    /// An offset equal to the default drops the entry: absence spells "never
-    /// tuned".
-    fn save_offset(&mut self) {
-        let Some(track) = self.engine.track() else {
-            return;
-        };
-        let (key, label) = (track.id.clone(), track.label());
-        let offset = self.engine.clock().offset_ms();
-        if offset == self.cfg.offset_ms {
-            self.offsets.clear(&key);
-        } else {
-            self.offsets.set(&key, &label, offset);
+        if let Some((track, source, _)) = self.sync_target() {
+            self.offsets.clear(&track, source);
         }
     }
 
@@ -285,7 +293,7 @@ async fn run_inner(
                         start_lookup(&mut app, track.map(|b| *b), &lookup, &fetch_tx);
                     }
                     Change::Gone => {
-                        app.state = LyricState::Idle;
+                        app.show(LyricState::Idle);
                         app.note("player closed");
                     }
                     Change::Resynced | Change::None => {}
@@ -646,7 +654,7 @@ fn start_lookup(
     tx: &mpsc::UnboundedSender<FetchResult>,
 ) {
     let Some(track) = track.filter(Track::is_usable) else {
-        app.state = LyricState::Idle;
+        app.show(LyricState::Idle);
         return;
     };
 
@@ -654,14 +662,14 @@ fn start_lookup(
     if let Some(dir) = app.cfg.lrc_dir.clone()
         && let Some(found) = crate::lyrics::local_lookup(&dir, &track)
     {
-        app.state = ready_from(found);
+        app.show_found(found);
         return;
     }
 
-    app.state = match crate::lyrics::cached(lookup, &app.cfg.providers, &track) {
-        Some(Outcome::Found(found)) => ready_from(*found),
-        _ => LyricState::Searching,
-    };
+    match crate::lyrics::cached(lookup, &app.cfg.providers, &track) {
+        Some(Outcome::Found(found)) => app.show_found(*found),
+        _ => app.show(LyricState::Searching),
+    }
 
     let lookup = lookup.clone();
     let tx = tx.clone();
@@ -700,16 +708,16 @@ fn apply_fetch(app: &mut App, result: FetchResult) {
     match result.outcome {
         Ok(Outcome::Found(found)) => {
             if !matches!(&app.state, LyricState::Ready { raw, .. } if *raw == found.raw) {
-                app.state = ready_from(*found);
+                app.show_found(*found);
             }
         }
         // Lyrics already on screen came from the cache; nothing better turned
         // up, and a failure to ask again is no reason to take them away.
         Ok(Outcome::Missing) if showing => {}
-        Ok(Outcome::Missing) => app.state = LyricState::Missing,
+        Ok(Outcome::Missing) => app.show(LyricState::Missing),
         Err(_) if showing => {}
         Err(e) => {
-            app.state = LyricState::Missing;
+            app.show(LyricState::Missing);
             app.note(format!("lookup failed: {e}"));
         }
     }
@@ -725,9 +733,12 @@ const COARSE_NUDGE_MS: i64 = 1000;
 /// Shared by all four nudge keys so the message and the save cannot drift
 /// apart.
 fn nudge(app: &mut App, delta_ms: i64) {
-    app.nudge_offset(delta_ms);
+    let saved = app.nudge_offset(delta_ms);
     let off = app.offset_ms();
-    app.note(format!("offset {off:+}ms  (saved for this song)"));
+    app.note(match saved {
+        Some(source) => format!("offset {off:+}ms  (saved for this song on {source})"),
+        None => format!("offset {off:+}ms  (not saved: no lyrics showing)"),
+    });
 }
 
 async fn handle_key(
@@ -826,7 +837,7 @@ async fn handle_key(
                 let req = crate::lyrics::request_for(&track, true);
                 lookup.forget(&req, &app.cfg.providers);
                 app.note("refetching");
-                app.state = LyricState::Searching;
+                app.show(LyricState::Searching);
                 start_lookup(app, Some(track), lookup, tx);
             }
         }
