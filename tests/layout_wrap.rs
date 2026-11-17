@@ -327,6 +327,61 @@ fn the_second_voice_is_drawn_above_the_main_line() {
 }
 
 #[test]
+fn a_background_voice_leaves_the_line_where_it_would_be_alone() {
+    let f = font::block();
+    let lit_rows = |second| {
+        let out = render(&lyric("LOVE", second), &f, 80, 24, Theme::default());
+        inked(&out)
+            .into_iter()
+            .filter(|(_, c)| drawn_in(c, Theme::default().unsung))
+            .map(|(i, _)| i)
+            .collect::<Vec<_>>()
+    };
+    let backed = lit_rows(Some(SecondVoice {
+        text: "OOH",
+        background: true,
+        highlight: 0,
+        reveal: usize::MAX,
+    }));
+    assert_eq!(backed, lit_rows(None));
+}
+
+#[test]
+fn a_background_voice_stays_put_when_either_voice_brings_an_accent_or_a_descender() {
+    let f = font::block();
+    // Capitals first in both, so the top inked row is the cap line.
+    let backing_top = |main: &str, backing: &str| {
+        let out = render(
+            &lyric(
+                main,
+                Some(SecondVoice {
+                    text: backing,
+                    background: true,
+                    highlight: 0,
+                    reveal: usize::MAX,
+                }),
+            ),
+            &f,
+            80,
+            24,
+            Theme::default(),
+        );
+        inked(&out)
+            .into_iter()
+            .find(|(_, c)| c.contains(&Theme::default().dim))
+            .map(|(i, _)| i)
+            .expect("the backing vocal is on screen")
+    };
+    let plain = backing_top("LOVE", "HOH");
+    assert_eq!(backing_top("LOVE", "HOy"), plain, "its descender moved it");
+    assert_eq!(
+        backing_top("LÉVE", "HOH"),
+        plain,
+        "the line's accent moved it"
+    );
+}
+
+#[test]
 fn a_background_voice_is_dimmed_and_a_size_smaller() {
     let theme = Theme::default();
     let out = render(

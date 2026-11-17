@@ -111,15 +111,13 @@ fn a_background_line_is_attached_to_its_own_line_not_the_nearest_one() {
         .find(|l| l.text == "Long third line")
         .expect("the line the background belongs to");
     assert_eq!(host.secondary[0].text, "late");
+    // Still drawn, since it is sung while the next line is up.
     let neighbour = parsed
         .lines
         .iter()
         .find(|l| l.text == "Fourth line")
         .expect("the line it starts over");
-    assert!(
-        neighbour.secondary.iter().all(|s| !s.background),
-        "the background belongs to the line that declared it"
-    );
+    assert!(neighbour.secondary.iter().any(|s| s.text == "late"));
 }
 
 #[test]

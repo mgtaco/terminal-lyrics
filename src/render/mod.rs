@@ -25,6 +25,11 @@ pub const LINE_GAP: usize = 1;
 /// than one phrase that wrapped.
 pub const VOICE_GAP: usize = 2;
 
+/// From a backing vocal's baseline to the cap line of the line under it. Its
+/// descenders and the line's accents fill this rather than add to it, so the
+/// two stay put from word to word.
+const BACKING_GAP: usize = VOICE_GAP + 1;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Theme {
     pub sung: Color,
@@ -174,9 +179,11 @@ pub fn render(
                 };
                 rows.extend(block_rows(&s.fitted.layout, style, width, theme));
                 if !main.layout.is_empty() {
-                    rows.extend(std::iter::repeat_n(Line::default(), VOICE_GAP));
+                    let gap = voice_gap(&s.fitted.layout, s.background, &main.layout);
+                    rows.extend(std::iter::repeat_n(Line::default(), gap));
                 }
             }
+            let above_main = rows.len();
             rows.extend(block_rows(
                 &main.layout,
                 RowStyle::Sweep {
@@ -188,16 +195,26 @@ pub fn render(
             ));
             // Centring ignores the rows an accent or a descender added, so the
             // capitals stay put from one word to the next.
-            let first = second
-                .as_ref()
-                .and_then(|s| s.fitted.layout.lines.first())
-                .or(main.layout.lines.first());
-            let last = main
-                .layout
-                .lines
-                .last()
-                .or(second.as_ref().and_then(|s| s.fitted.layout.lines.last()));
-            let overhang = (first.map_or(0, |l| l.above), last.map_or(0, |l| l.below));
+            let main_overhang = (
+                main.layout.lines.first().map_or(0, |l| l.above),
+                main.layout.lines.last().map_or(0, |l| l.below),
+            );
+            let overhang = match &second {
+                // The line stays where it would be alone; the backing vocal
+                // just takes room above it.
+                Some(s) if s.background && !main.layout.is_empty() => {
+                    (above_main + main_overhang.0, main_overhang.1)
+                }
+                Some(s) if main.layout.is_empty() => (
+                    s.fitted.layout.lines.first().map_or(0, |l| l.above),
+                    s.fitted.layout.lines.last().map_or(0, |l| l.below),
+                ),
+                Some(s) => (
+                    s.fitted.layout.lines.first().map_or(0, |l| l.above),
+                    main_overhang.1,
+                ),
+                None => main_overhang,
+            };
             vertically_centre(rows, height, overhang)
         }
         Screen::Waiting {
@@ -361,7 +378,7 @@ fn fit_voices(
         let ls = layout::layout(second.text, &second_font, width);
         let mut rows = ls.rows(LINE_GAP);
         if !lm.is_empty() {
-            rows += VOICE_GAP + lm.rows(LINE_GAP);
+            rows += voice_gap(&ls, second.background, &lm) + lm.rows(LINE_GAP);
         }
         if rows <= height.max(1) {
             return (
@@ -380,6 +397,16 @@ fn fit_voices(
     }
 
     (solo, None)
+}
+
+/// Blank rows between the second voice and the line.
+fn voice_gap(second: &Layout, background: bool, main: &Layout) -> usize {
+    if !background {
+        return VOICE_GAP;
+    }
+    let below = second.lines.last().map_or(0, |l| l.below);
+    let above = main.lines.first().map_or(0, |l| l.above);
+    BACKING_GAP.saturating_sub(below + above).max(1)
 }
 
 /// Rows of glyph art for one voice, centred horizontally but not vertically —

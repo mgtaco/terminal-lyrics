@@ -442,6 +442,7 @@ fn finalise(drafts: Vec<Draft>, meta: Meta) -> Lyrics {
     let mains = collapse_equal_starts(&mut lines, mains);
     assign_ends(&mut lines);
     pair_duets(&mut lines, &mains);
+    carry_backgrounds(&mut lines);
 
     for line in &mut lines {
         close_words(&mut line.words, line.end);
@@ -650,6 +651,23 @@ fn pair_duets(lines: &mut [Line], mains: &[Draft]) {
             words,
             background: false,
         });
+    }
+}
+
+/// A backing vocal often runs on after the next line comes in; it goes over to
+/// that line too rather than being cut off mid-word.
+fn carry_backgrounds(lines: &mut [Line]) {
+    let mut carried: Vec<(usize, Secondary)> = Vec::new();
+    for (idx, line) in lines.iter().enumerate() {
+        for s in line.secondary.iter().filter(|s| s.background) {
+            let later = lines[idx + 1..]
+                .iter()
+                .take_while(|l| l.start < s.display_end());
+            carried.extend((idx + 1..).zip(later).map(|(to, _)| (to, s.clone())));
+        }
+    }
+    for (to, s) in carried {
+        lines[to].secondary.push(s);
     }
 }
 

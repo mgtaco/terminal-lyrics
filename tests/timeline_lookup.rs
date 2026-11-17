@@ -229,6 +229,28 @@ fn a_second_voice_is_offered_only_while_it_is_singing() {
 }
 
 #[test]
+fn a_background_vocal_running_into_the_next_line_is_not_cut_off() {
+    let t = tl("[00:10.00]can you make it last forever?\n\
+         [00:12.00][bg:00:10.00][end:00:14.00](can you?)\n\
+         [00:13.00]i said i'm 'bout to go to war\n\
+         [00:15.00][bg:00:13.00][end:00:16.00]('bout to)\n\
+         [00:20.00]next\n");
+    let Position::Line { index } = t.locate(13.5) else {
+        panic!("the second line is up")
+    };
+    assert_eq!(
+        t.secondary(index, 13.5).map(|s| s.text.as_str()),
+        Some("can you?"),
+        "still being sung over the new line"
+    );
+    assert!(t.secondary(index, 14.5).is_none(), "gone once it is sung");
+    assert_eq!(
+        t.secondary(index, 15.5).map(|s| s.text.as_str()),
+        Some("'bout to")
+    );
+}
+
+#[test]
 fn a_very_short_background_phrase_is_held_long_enough_to_read() {
     // Apple times these to the syllable, so "(ooh)" can be a fifth of a second.
     // Drawn and pulled that fast it reads as a flicker rather than a voice.
