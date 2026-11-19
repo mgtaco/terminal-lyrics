@@ -150,7 +150,7 @@ Shifts are kept in `~/.local/share/terminal-lyrics/offsets.json` (`~/Library/App
 <br>
 <table><tr><td>
 
-With [cava](https://github.com/karlstav/cava) installed, `v` (or `--visualizer`, or `visualizer = true` in the config) draws its spectrum bars under the lyrics, in the same faint colour as the status line. It reads the input settings from your own `~/.config/cava/config`, so if cava already listens to one player, these bars will too. Without cava, nothing is drawn.
+With [cava](https://github.com/karlstav/cava) installed, `v` (or `--visualizer`, or `visualizer = true` in the config) draws its spectrum bars under the lyrics, in the same faint colour as the status line. It reads the input settings from your own `~/.config/cava/config`, so if cava already listens to one player, these bars will too. If that player isn't running, the bars stay flat until it is, rather than picking up your mic. Without cava, nothing is drawn.
 
 </td></tr></table>
 <br>

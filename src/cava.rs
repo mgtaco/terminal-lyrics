@@ -131,6 +131,12 @@ impl Cava {
         let child = Command::new("cava")
             .arg("-p")
             .arg(&config)
+            // A PipeWire `source` that is not there (the player is closed) would
+            // otherwise fall back to the default input: the mic. Wait for it.
+            .env(
+                "PIPEWIRE_PROPS",
+                "{ node.dont-fallback = true node.linger = true }",
+            )
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
